@@ -1,0 +1,264 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --color-primary: #B9F34A;
+    --color-on-primary: #131F00;
+    --color-secondary: #26865B;
+    --color-on-secondary: #FFFFFF;
+    --color-accent: #FF9F43;
+    --color-on-accent: #1F1100;
+    --color-success: #32C77A;
+    --color-warning: #FFC857;
+    --color-error: #FF5C5C;
+
+    /* Light Theme (Clean daytime alternative) */
+    --color-background: #F4F8F5;
+    --color-surface: #FFFFFF;
+    --color-surface-elevated: #E8F3EE;
+    --color-text: #101A17;
+    --color-muted: #56615D;
+    --color-border: #D0DDD6;
+  }
+
+  .dark {
+    /* Dark Theme (Primary visual identity) */
+    --color-background: #101A17;
+    --color-surface: #1B2923;
+    --color-surface-elevated: #23342D;
+    --color-text: #FFFFFF;
+    --color-muted: #9BAAA2;
+    --color-border: #2C3B34;
+  }
+
+  body {
+    background-color: var(--color-background);
+    color: var(--color-text);
+    font-family: 'Inter', sans-serif;
+    transition: background-color 150ms ease, color 150ms ease;
+  }
+
+  /* Prevent awkward line breaks and orphaned words */
+  h1, h2, h3, h4, h5, h6 {
+    text-wrap: balance;
+  }
+
+  p, li, blockquote {
+    text-wrap: pretty;
+  }
+
+  /* Disable italic everywhere in the interface per design skill rules */
+  * {
+    font-style: normal !important;
+  }
+}
+
+@layer utilities {
+  /* Landing page design skill named typography styles */
+  .heading-1 {
+    font-family: 'Manrope', sans-serif;
+    font-size: 3.75rem; /* 60px */
+    line-height: 1;
+    font-weight: 600;
+    letter-spacing: -0.025em;
+  }
+
+  .heading-2 {
+    font-family: 'Manrope', sans-serif;
+    font-size: 3rem; /* 48px */
+    line-height: 1;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+  }
+
+  .heading-3 {
+    font-family: 'Manrope', sans-serif;
+    font-size: 2.25rem; /* 36px */
+    line-height: 2.5rem; /* 40px */
+    font-weight: 600;
+    letter-spacing: -0.02em;
+  }
+
+  .heading-4 {
+    font-family: 'Manrope', sans-serif;
+    font-size: 1.875rem; /* 30px */
+    line-height: 2.25rem; /* 36px */
+    font-weight: 600;
+    letter-spacing: -0.015em;
+  }
+
+  .heading-5 {
+    font-family: 'Manrope', sans-serif;
+    font-size: 1.5rem; /* 24px */
+    line-height: 2rem; /* 32px */
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+
+  .heading-6 {
+    font-family: 'Manrope', sans-serif;
+    font-size: 1.25rem; /* 20px */
+    line-height: 1.75rem; /* 28px */
+    font-weight: 600;
+  }
+
+  .title-1 {
+    font-family: 'Manrope', sans-serif;
+    font-size: 1.25rem;
+    line-height: 1.75rem;
+    font-weight: 500;
+  }
+
+  .title-2 {
+    font-family: 'Manrope', sans-serif;
+    font-size: 1.125rem;
+    line-height: 1.75rem;
+    font-weight: 500;
+  }
+
+  .title-3 {
+    font-family: 'Manrope', sans-serif;
+    font-size: 1rem;
+    line-height: 1.5rem;
+    font-weight: 500;
+  }
+
+  .title-4 {
+    font-family: 'Manrope', sans-serif;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    font-weight: 500;
+  }
+
+  .title-5 {
+    font-family: 'Manrope', sans-serif;
+    font-size: 0.75rem;
+    line-height: 1rem;
+    font-weight: 500;
+  }
+
+  .body-1 {
+    font-family: 'Inter', sans-serif;
+    font-size: 1rem;
+    line-height: 1.5rem;
+    font-weight: 600;
+  }
+
+  .body-2 {
+    font-family: 'Inter', sans-serif;
+    font-size: 1rem;
+    line-height: 1.5rem;
+    font-weight: 500;
+  }
+
+  .body-3 {
+    font-family: 'Inter', sans-serif;
+    font-size: 1rem;
+    line-height: 1.5rem;
+    font-weight: 400;
+  }
+
+  .body-4 {
+    font-family: 'Inter', sans-serif;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    font-weight: 600;
+  }
+
+  .body-5 {
+    font-family: 'Inter', sans-serif;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    font-weight: 500;
+  }
+
+  .body-6 {
+    font-family: 'Inter', sans-serif;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    font-weight: 400;
+  }
+
+  .button-lg {
+    font-family: 'Inter', sans-serif;
+    font-size: 1.125rem;
+    line-height: 1.75rem;
+    font-weight: 600;
+  }
+
+  .button-md {
+    font-family: 'Inter', sans-serif;
+    font-size: 1rem;
+    line-height: 1.5rem;
+    font-weight: 600;
+  }
+
+  .button-sm {
+    font-family: 'Inter', sans-serif;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    font-weight: 600;
+  }
+
+  .button-xsm {
+    font-family: 'Inter', sans-serif;
+    font-size: 0.75rem;
+    line-height: 1rem;
+    font-weight: 600;
+  }
+
+  .caption-1 {
+    font-family: 'Inter', sans-serif;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    font-weight: 500;
+  }
+
+  .caption-2 {
+    font-family: 'Inter', sans-serif;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    font-weight: 400;
+  }
+
+  .caption-3 {
+    font-family: 'Inter', sans-serif;
+    font-size: 0.75rem;
+    line-height: 1rem;
+    font-weight: 600;
+  }
+
+  .caption-4 {
+    font-family: 'Inter', sans-serif;
+    font-size: 0.75rem;
+    line-height: 1rem;
+    font-weight: 500;
+  }
+
+  .caption-5 {
+    font-family: 'Inter', sans-serif;
+    font-size: 0.75rem;
+    line-height: 1rem;
+    font-weight: 400;
+  }
+
+  /* Interaction and Surface Transitions per Design System */
+  .transition-state {
+    transition-property: color, background-color, border-color, transform, opacity, box-shadow;
+    transition-duration: 120ms;
+    transition-timing-function: ease-out;
+  }
+
+  .transition-surface {
+    transition-property: transform, opacity;
+    transition-duration: 220ms;
+    transition-timing-function: cubic-bezier(0.2, 0, 0, 1);
+  }
+
+  .transition-base {
+    transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+    transition-duration: 500ms;
+  }
+}
