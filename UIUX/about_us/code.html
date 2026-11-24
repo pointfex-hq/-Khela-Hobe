@@ -1,0 +1,353 @@
+<!DOCTYPE html><html lang="en" class="dark"><head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>About Us — Khela Hobe</title>
+  <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+  <script id="tailwind-config">/** @type {import('tailwindcss').Config} */
+globalThis.tailwind = globalThis.tailwind || {};
+globalThis.tailwind.config = {
+  darkMode: 'class',
+  theme: {
+    extend: {
+      colors: {
+        'primary': '#B9F34A',
+        'on-primary': '#131F00',
+        'secondary': '#26865B',
+        'on-secondary': '#FFFFFF',
+        'accent': '#FF9F43',
+        'on-accent': '#1F1100',
+        'success': '#32C77A',
+        'on-success': '#002110',
+        'warning': '#FFC857',
+        'on-warning': '#261900',
+        'error': '#FF5C5C',
+        'on-error': '#2B0000',
+        'light-background': '#F4F8F5',
+        'light-on-background': '#101A17',
+        'light-surface': '#FFFFFF',
+        'light-on-surface': '#101A17',
+        'light-surface-elevated': '#E8F3EE',
+        'light-on-surface-elevated': '#101A17',
+        'light-muted': '#56615D',
+        'light-border': '#D0DDD6',
+        'dark-background': '#101A17',
+        'dark-on-background': '#FFFFFF',
+        'dark-surface': '#1B2923',
+        'dark-on-surface': '#FFFFFF',
+        'dark-surface-elevated': '#23342D',
+        'dark-on-surface-elevated': '#FFFFFF',
+        'dark-muted': '#9BAAA2',
+        'dark-border': '#2C3B34',
+      },
+      borderRadius: {
+        'sm': '6px',
+        'DEFAULT': '8px',
+        'md': '12px',
+        'lg': '16px',
+        'xl': '20px',
+        'full': '9999px',
+      },
+      spacing: {
+        'gutter-xs': '4px',
+        'gutter-sm': '8px',
+        'gutter-md': '16px',
+        'gutter-lg': '24px',
+        'gutter-xl': '32px',
+        'section': '48px',
+        'page-margin': '24px',
+      },
+      fontFamily: {
+        'display': ['"Manrope"', 'sans-serif'],
+        'headline': ['"Manrope"', 'sans-serif'],
+        'title': ['"Manrope"', 'sans-serif'],
+        'body': ['"Inter"', 'sans-serif'],
+        'label': ['"Inter"', 'sans-serif'],
+        'mono': ['"Fragment Mono"', 'monospace'],
+      },
+      fontSize: {
+        'display-lg': ['48px', { lineHeight: '54px', letterSpacing: '-0.75px', fontWeight: '800' }],
+        'display-lg-mobile': ['32px', { lineHeight: '38px', letterSpacing: '-0.5px', fontWeight: '800' }],
+        'headline-lg': ['32px', { lineHeight: '38px', letterSpacing: '-0.5px', fontWeight: '700' }],
+        'headline-md': ['24px', { lineHeight: '30px', letterSpacing: '-0.25px', fontWeight: '700' }],
+        'title-lg': ['20px', { lineHeight: '26px', letterSpacing: '-0.15px', fontWeight: '700' }],
+        'title-md': ['16px', { lineHeight: '22px', letterSpacing: '0px', fontWeight: '600' }],
+        'body-lg': ['16px', { lineHeight: '24px', letterSpacing: '0px', fontWeight: '400' }],
+        'body-md': ['14px', { lineHeight: '21px', letterSpacing: '0px', fontWeight: '400' }],
+        'body-sm': ['12px', { lineHeight: '18px', letterSpacing: '0px', fontWeight: '400' }],
+        'label-lg': ['14px', { lineHeight: '20px', letterSpacing: '0px', fontWeight: '600' }],
+        'label-md': ['12px', { lineHeight: '16px', letterSpacing: '0.2px', fontWeight: '600' }],
+        'label-sm': ['11px', { lineHeight: '14px', letterSpacing: '0.3px', fontWeight: '600' }],
+        'mono-sm': ['12px', { lineHeight: '16px', letterSpacing: '0px', fontWeight: '400' }],
+      },
+      transitionDuration: {
+        'state-change': '120ms',
+        'surface-enter': '220ms',
+        'surface-exit': '150ms',
+      },
+      transitionDelay: {
+        'state-change': '0ms',
+        'surface-enter': '0ms',
+        'surface-exit': '0ms',
+      },
+      transitionTimingFunction: {
+        'state-change': 'ease-out',
+        'surface-enter': 'cubic-bezier(0.2, 0, 0, 1)',
+        'surface-exit': 'cubic-bezier(0.3, 0, 1, 1)',
+      },
+    },
+  },
+};
+if (typeof module !== 'undefined') module.exports = globalThis.tailwind.config;
+</script>
+  <link href="https://fonts.googleapis.com/css2?family=Fragment+Mono&amp;family=Inter:wght@400;500;600;700&amp;family=Manrope:wght@600;700;800&amp;display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=block" rel="stylesheet">
+  <style>.material-symbols-outlined, .material-symbols-rounded, .material-symbols-sharp, .material-icons { display: inline-block; width: 1em; height: 1em; line-height: 1 !important; box-sizing: content-box; overflow: hidden; white-space: nowrap; direction: ltr; vertical-align: middle; }</style>
+</head>
+<body class="bg-light-background dark:bg-dark-background text-light-on-background dark:text-dark-on-background font-body antialiased min-h-[1024px] flex flex-col" data-stitch-vh="min-h-[1024px]===min-h-screen">
+
+  <!-- Top Navigation Header -->
+  <header class="sticky top-0 z-30 border-b border-light-border dark:border-dark-border bg-light-background dark:bg-dark-background">
+    <div class="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between gap-6">
+      <a href="../landing/LandingPage.html" class="flex items-center gap-2.5 shrink-0">
+        <span class="w-9 h-9 rounded-md bg-primary text-on-primary flex items-center justify-center">
+          <span class="material-symbols-outlined text-title-lg" aria-hidden="true">sports_soccer</span>
+        </span>
+        <span class="font-headline text-title-lg tracking-tight" data-design-text-token="title-lg">Khela Hobe</span>
+      </a>
+
+      <nav aria-label="Primary navigation" class="hidden md:flex items-center gap-8">
+        <a href="../landing/LandingPage.html#sports" class="font-label text-label-lg text-light-muted dark:text-dark-muted hover:text-light-on-background dark:hover:text-dark-on-background transition-colors duration-state-change" data-design-text-token="label-lg">Sports</a>
+        <a href="#how-it-works" class="font-label text-label-lg text-light-muted dark:text-dark-muted hover:text-light-on-background dark:hover:text-dark-on-background transition-colors duration-state-change" data-design-text-token="label-lg">How It Works</a>
+        <a href="#safety" class="font-label text-label-lg text-light-muted dark:text-dark-muted hover:text-light-on-background dark:hover:text-dark-on-background transition-colors duration-state-change" data-design-text-token="label-lg">Safety &amp; Trust</a>
+        <a href="#" aria-current="page" class="font-label text-label-lg text-primary" data-design-text-token="label-lg">About Us</a>
+      </nav>
+
+      <div class="flex items-center gap-3 shrink-0">
+        <button type="button" aria-label="Toggle navigation menu" onclick="document.getElementById(&#39;mobile-public-nav&#39;).classList.toggle(&#39;hidden&#39;)" class="md:hidden inline-flex items-center justify-center w-10 h-10 rounded-md bg-light-surface dark:bg-dark-surface border border-light-border dark:border-dark-border hover:border-primary shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"><span class="material-symbols-outlined text-title-md" aria-hidden="true">menu</span></button>
+        <button type="button" aria-label="Toggle theme" onclick="document.documentElement.classList.toggle(&#39;dark&#39;)" class="inline-flex items-center justify-center w-10 h-10 rounded-md bg-light-surface dark:bg-dark-surface border border-light-border dark:border-dark-border hover:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
+          <span class="material-symbols-outlined text-title-md" aria-hidden="true">dark_mode</span>
+        </button>
+        <a href="../login/Login.html" data-component-id="button-tertiary" data-component-type="button" data-component-variant="tertiary" class="shrink-0 inline-flex items-center justify-center px-4 py-2 rounded-md bg-light-surface dark:bg-dark-surface text-light-on-surface dark:text-dark-on-surface border border-light-border dark:border-dark-border font-label text-label-lg transition-colors duration-state-change hover:bg-light-surface-elevated dark:hover:bg-dark-surface-elevated">
+          <span data-design-text-token="label-lg">Sign In</span>
+        </a>
+        <a href="../register/Register.html" data-component-id="button-primary" data-component-type="button" data-component-variant="primary" class="shrink-0 inline-flex items-center justify-center px-4 py-2 rounded-md bg-primary text-on-primary font-label text-label-lg transition-opacity duration-state-change hover:opacity-90">
+          <span data-design-text-token="label-lg">Join Free</span>
+        </a>
+      </div>
+    </div>
+  
+    <nav id="mobile-public-nav" aria-label="Mobile primary navigation" class="md:hidden hidden border-t border-light-border dark:border-dark-border bg-light-surface dark:bg-dark-surface px-4 py-4 flex flex-col gap-3">
+      
+        <a href="../landing/LandingPage.html#sports" class="font-label text-label-lg text-light-muted dark:text-dark-muted hover:text-light-on-background dark:hover:text-dark-on-background transition-colors duration-state-change" data-design-text-token="label-lg">Sports</a>
+        <a href="#how-it-works" class="font-label text-label-lg text-light-muted dark:text-dark-muted hover:text-light-on-background dark:hover:text-dark-on-background transition-colors duration-state-change" data-design-text-token="label-lg">How It Works</a>
+        <a href="#safety" class="font-label text-label-lg text-light-muted dark:text-dark-muted hover:text-light-on-background dark:hover:text-dark-on-background transition-colors duration-state-change" data-design-text-token="label-lg">Safety &amp; Trust</a>
+        <a href="#" aria-current="page" class="font-label text-label-lg text-primary" data-design-text-token="label-lg">About Us</a>
+      
+    </nav>
+  </header>
+
+  <main class="flex-1">
+    <!-- Mission & Vision Hero -->
+    <section class="max-w-7xl mx-auto px-6 py-12 lg:py-16 grid grid-cols-1 lg:grid-cols-12 gap-10 items-center">
+      <div class="lg:col-span-7 flex flex-col gap-5">
+        <div class="inline-flex items-center gap-2 self-start px-3 py-1.5 rounded-full bg-light-surface dark:bg-dark-surface border border-light-border dark:border-dark-border">
+          <span class="w-2 h-2 rounded-full bg-primary" aria-hidden="true"></span>
+          <span class="font-label text-label-md text-light-on-surface dark:text-dark-on-surface" data-design-text-token="label-md">Built for Local Sports Communities in Bangladesh</span>
+        </div>
+
+        <h1 class="font-display text-display-lg-mobile lg:text-display-lg text-balance text-light-on-background dark:text-dark-on-background" data-design-text-token="display-lg">
+          Turning Empty Turfs and Solo Evenings Into Real Matches.
+        </h1>
+
+        <p class="font-body text-body-lg text-pretty text-light-muted dark:text-dark-muted max-w-prose" data-design-text-token="body-lg">
+          Khela Hobe exists to make recreational sport effortless across Bangladesh. Whether you are short two players for Friday futsal in Banani or looking for an evening badminton court in Uttara, we connect reliable teammates, shared gear, and verified local venues without endless group-chat chaos.
+        </p>
+
+        <div class="flex flex-wrap items-center gap-4 pt-2">
+          <a href="../explore-matches/ExploreMatches.html" class="shrink-0 inline-flex items-center justify-center gap-2 px-6 py-3 rounded-md bg-primary text-on-primary font-label text-label-lg transition-opacity duration-state-change hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
+            <span class="material-symbols-outlined text-title-md" aria-hidden="true">explore</span>
+            <span data-design-text-token="label-lg">Explore Nearby Matches</span>
+          </a>
+          <a href="../create-match/CreateMatch.html" class="shrink-0 inline-flex items-center justify-center gap-2 px-6 py-3 rounded-md bg-secondary text-on-secondary font-label text-label-lg transition-opacity duration-state-change hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-secondary">
+            <span class="material-symbols-outlined text-title-md" aria-hidden="true">add_circle</span>
+            <span data-design-text-token="label-lg">Organize a Quick Match</span>
+          </a>
+        </div>
+      </div>
+
+      <div class="lg:col-span-5">
+        <div class="rounded-xl overflow-hidden border border-light-border dark:border-dark-border bg-light-surface dark:bg-dark-surface">
+          <img src="https://lh3.googleusercontent.com/aida/ALJJyrBwt4hXYXhHuiQobo-R1J7vOyRcLR32j3UJ5Nb2KaNIu77a_jKlFtBAFtHfsqKv7qz6XwBS8GuzwloZ2wlfDJANryt38J2VON_OS2jhUBjoKvgOWiddXFZvaIzw9-EyNopI1Mr0plVKrbbXNospCTKxgSeEn02brP-wP6dTMxy3U_87vaDy3ESn27Kn8vH2Bt4yNo1kQ9rOw68ma5p7QwjjwLqAEjnZAeGEYt51DX8N_NdKrErc8stJgO6s" alt="Players competing under floodlights at a Dhaka futsal turf" class="w-full h-72 object-cover">
+          <div class="p-5 grid grid-cols-3 gap-4 border-t border-light-border dark:border-dark-border">
+            <div>
+              <p class="font-headline text-headline-md tabular-nums text-primary" data-design-text-token="headline-md">12+</p>
+              <p class="font-body text-body-sm text-light-muted dark:text-dark-muted" data-design-text-token="body-sm">Active sports</p>
+            </div>
+            <div>
+              <p class="font-headline text-headline-md tabular-nums text-light-on-surface dark:text-dark-on-surface" data-design-text-token="headline-md">64</p>
+              <p class="font-body text-body-sm text-light-muted dark:text-dark-muted" data-design-text-token="body-sm">Districts supported</p>
+            </div>
+            <div>
+              <p class="font-headline text-headline-md tabular-nums text-success" data-design-text-token="headline-md">98%</p>
+              <p class="font-body text-body-sm text-light-muted dark:text-dark-muted" data-design-text-token="body-sm">Match show-up</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Mission & Vision Pillars -->
+    <section class="max-w-7xl mx-auto px-6 py-10 border-t border-light-border dark:border-dark-border">
+      <div class="mb-8 max-w-2xl">
+        <span class="font-label text-label-sm uppercase text-primary" data-design-text-token="label-sm">Mission &amp; Community Purpose</span>
+        <h2 class="font-headline text-headline-lg mt-1" data-design-text-token="headline-lg">Why We Built Khela Hobe</h2>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <article class="rounded-lg bg-light-surface dark:bg-dark-surface border border-light-border dark:border-dark-border p-6 flex flex-col gap-3">
+          <span class="w-11 h-11 rounded-md bg-light-surface-elevated dark:bg-dark-surface-elevated text-primary flex items-center justify-center">
+            <span class="material-symbols-outlined text-title-lg" aria-hidden="true">bolt</span>
+          </span>
+          <h3 class="font-headline text-title-lg" data-design-text-token="title-lg">Instant Quick Matches</h3>
+          <p class="font-body text-body-md text-light-muted dark:text-dark-muted" data-design-text-token="body-md">
+            Quick Matches publish immediately without waiting on administrative approval queues, so organizers can fill open slots the same afternoon.
+          </p>
+        </article>
+
+        <article class="rounded-lg bg-light-surface dark:bg-dark-surface border border-light-border dark:border-dark-border p-6 flex flex-col gap-3">
+          <span class="w-11 h-11 rounded-md bg-light-surface-elevated dark:bg-dark-surface-elevated text-secondary flex items-center justify-center">
+            <span class="material-symbols-outlined text-title-lg" aria-hidden="true">sports_tennis</span>
+          </span>
+          <h3 class="font-headline text-title-lg" data-design-text-token="title-lg">Shared Equipment Pledges</h3>
+          <p class="font-body text-body-md text-light-muted dark:text-dark-muted" data-design-text-token="body-md">
+            Every match tracks Required, Committed, and Remaining gear transparently—whether that is bibs, shuttlecock tubes, or match balls.
+          </p>
+        </article>
+
+        <article class="rounded-lg bg-light-surface dark:bg-dark-surface border border-light-border dark:border-dark-border p-6 flex flex-col gap-3">
+          <span class="w-11 h-11 rounded-md bg-light-surface-elevated dark:bg-dark-surface-elevated text-accent flex items-center justify-center">
+            <span class="material-symbols-outlined text-title-lg" aria-hidden="true">verified_user</span>
+          </span>
+          <h3 class="font-headline text-title-lg" data-design-text-token="title-lg">Trusted Local Play</h3>
+          <p class="font-body text-body-md text-light-muted dark:text-dark-muted" data-design-text-token="body-md">
+            Clear skill levels, organizer rosters, and post-match moderation keep neighborhood turfs welcoming for beginners and competitive players alike.
+          </p>
+        </article>
+      </div>
+    </section>
+
+    <!-- How It Works -->
+    <section id="how-it-works" class="max-w-7xl mx-auto px-6 py-10 border-t border-light-border dark:border-dark-border">
+      <div class="mb-8">
+        <span class="font-label text-label-sm uppercase text-primary" data-design-text-token="label-sm">How It Works</span>
+        <h2 class="font-headline text-headline-lg mt-1" data-design-text-token="headline-lg">From Discovery to Kickoff in Four Steps</h2>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+        <div class="rounded-lg bg-light-surface dark:bg-dark-surface border border-light-border dark:border-dark-border p-5 flex flex-col gap-2">
+          <span class="font-mono text-mono-sm text-primary" data-design-text-token="mono-sm">STEP 01</span>
+          <h3 class="font-headline text-title-md" data-design-text-token="title-md">Discover Nearby</h3>
+          <p class="font-body text-body-sm text-light-muted dark:text-dark-muted" data-design-text-token="body-sm">
+            Filter Quick Matches by sport, Dhaka/Bangladesh area, skill tier, and Asia/Dhaka start time.
+          </p>
+        </div>
+
+        <div class="rounded-lg bg-light-surface dark:bg-dark-surface border border-light-border dark:border-dark-border p-5 flex flex-col gap-2">
+          <span class="font-mono text-mono-sm text-primary" data-design-text-token="mono-sm">STEP 02</span>
+          <h3 class="font-headline text-title-md" data-design-text-token="title-md">Join or Apply</h3>
+          <p class="font-body text-body-sm text-light-muted dark:text-dark-muted" data-design-text-token="body-sm">
+            Tap Join Match for Open Join games, or send a position note for Approval Required rosters.
+          </p>
+        </div>
+
+        <div class="rounded-lg bg-light-surface dark:bg-dark-surface border border-light-border dark:border-dark-border p-5 flex flex-col gap-2">
+          <span class="font-mono text-mono-sm text-primary" data-design-text-token="mono-sm">STEP 03</span>
+          <h3 class="font-headline text-title-md" data-design-text-token="title-md">Pledge Gear</h3>
+          <p class="font-body text-body-sm text-light-muted dark:text-dark-muted" data-design-text-token="body-sm">
+            Check remaining equipment needs and pledge what you can bring so nothing is missing at kickoff.
+          </p>
+        </div>
+
+        <div class="rounded-lg bg-light-surface dark:bg-dark-surface border border-light-border dark:border-dark-border p-5 flex flex-col gap-2">
+          <span class="font-mono text-mono-sm text-primary" data-design-text-token="mono-sm">STEP 04</span>
+          <h3 class="font-headline text-title-md" data-design-text-token="title-md">Show Up &amp; Play</h3>
+          <p class="font-body text-body-sm text-light-muted dark:text-dark-muted" data-design-text-token="body-sm">
+            Meet at the public venue, check in with your organizer, and build your player reliability record.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Safety & Guardian Principles + Contact Support -->
+    <section id="safety" class="max-w-7xl mx-auto px-6 py-10 border-t border-light-border dark:border-dark-border grid grid-cols-1 lg:grid-cols-12 gap-6">
+      <div class="lg:col-span-7 rounded-lg bg-light-surface dark:bg-dark-surface border border-light-border dark:border-dark-border p-6 flex flex-col gap-4">
+        <div class="flex items-center gap-3">
+          <span class="w-10 h-10 rounded-md bg-light-surface-elevated dark:bg-dark-surface-elevated text-success flex items-center justify-center">
+            <span class="material-symbols-outlined text-title-lg" aria-hidden="true">shield_person</span>
+          </span>
+          <div>
+            <h2 class="font-headline text-title-lg" data-design-text-token="title-lg">Safety &amp; Guardian Protection Principles</h2>
+            <p class="font-body text-body-sm text-light-muted dark:text-dark-muted" data-design-text-token="body-sm">Designed to protect youth athletes and community members.</p>
+          </div>
+        </div>
+
+        <ul class="flex flex-col gap-3 font-body text-body-md text-light-muted dark:text-dark-muted">
+          <li class="flex items-start gap-2.5">
+            <span class="material-symbols-outlined text-success text-title-md mt-0.5 shrink-0" aria-hidden="true">check_circle</span>
+            <span><strong class="text-light-on-surface dark:text-dark-on-surface">Public Venues Only:</strong> Match locations display verified turfs, courts, and fields—never private residential coordinates.</span>
+          </li>
+          <li class="flex items-start gap-2.5">
+            <span class="material-symbols-outlined text-success text-title-md mt-0.5 shrink-0" aria-hidden="true">check_circle</span>
+            <span><strong class="text-light-on-surface dark:text-dark-on-surface">Authorized Guardian Linking:</strong> Safety IDs only initiate a linking request; child activity remains private until the child and backend approve authorization.</span>
+          </li>
+          <li class="flex items-start gap-2.5">
+            <span class="material-symbols-outlined text-success text-title-md mt-0.5 shrink-0" aria-hidden="true">check_circle</span>
+            <span><strong class="text-light-on-surface dark:text-dark-on-surface">Active Moderation:</strong> Any player can report unsafe conduct or venue issues for rapid review by Khela Hobe moderators.</span>
+          </li>
+        </ul>
+      </div>
+
+      <div class="lg:col-span-5 rounded-lg bg-light-surface dark:bg-dark-surface border border-light-border dark:border-dark-border p-6 flex flex-col justify-between gap-5">
+        <div class="flex flex-col gap-3">
+          <h2 class="font-headline text-title-lg" data-design-text-token="title-lg">Contact &amp; Community Support</h2>
+          <p class="font-body text-body-md text-light-muted dark:text-dark-muted" data-design-text-token="body-md">
+            Need help with a match dispute, venue listing, or guardian linking? Our Dhaka community team responds daily between 9:00 AM and 10:00 PM BST.
+          </p>
+          <div class="flex flex-col gap-2 pt-2">
+            <div class="flex items-center gap-2.5 font-body text-body-md">
+              <span class="material-symbols-outlined text-primary text-title-md" aria-hidden="true">mail</span>
+              <span>support@khelahobe.bd</span>
+            </div>
+            <div class="flex items-center gap-2.5 font-body text-body-md">
+              <span class="material-symbols-outlined text-primary text-title-md" aria-hidden="true">location_on</span>
+              <span>Banani, Dhaka 1213, Bangladesh</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="pt-4 border-t border-light-border dark:border-dark-border flex flex-wrap gap-3">
+          <a href="../explore-matches/ExploreMatches.html" class="shrink-0 inline-flex items-center justify-center px-4 py-2.5 rounded-md bg-primary text-on-primary font-label text-label-lg hover:opacity-90">
+            <span data-design-text-token="label-lg">Browse Matches</span>
+          </a>
+          <a href="../register/Register.html" class="shrink-0 inline-flex items-center justify-center px-4 py-2.5 rounded-md bg-light-surface-elevated dark:bg-dark-surface-elevated border border-light-border dark:border-dark-border font-label text-label-lg hover:border-primary">
+            <span data-design-text-token="label-lg">Create Free Account</span>
+          </a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="border-t border-light-border dark:border-dark-border bg-light-surface dark:bg-dark-surface py-6">
+    <div class="max-w-7xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+      <p class="font-body text-body-sm text-light-muted dark:text-dark-muted" data-design-text-token="body-sm">Khela Hobe • Community Sports Platform for Bangladesh • Asia/Dhaka (BST)</p>
+      <div class="flex items-center gap-5 font-label text-label-md text-light-muted dark:text-dark-muted">
+        <a href="../landing/LandingPage.html" class="hover:text-primary">Home</a>
+        <a href="../explore-matches/ExploreMatches.html" class="hover:text-primary">Explore</a>
+        <a href="../login/Login.html" class="hover:text-primary">Sign In</a>
+      </div>
+    </div>
+  </footer>
+
+
+
+</body></html>
