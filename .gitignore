@@ -9,8 +9,11 @@ lerna-debug.log*
 
 node_modules
 .vite
+.next
+.vercel
 dist
 dist-ssr
+*.tsbuildinfo
 *.local
 
 # Editor directories and files

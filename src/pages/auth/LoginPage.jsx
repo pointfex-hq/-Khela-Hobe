@@ -1,36 +1,38 @@
 import React, { useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { Link, useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
-  faEnvelope,
   faEye,
   faEyeSlash,
-  faUserGroup,
   faCircleExclamation,
   faArrowRight,
 } from '@fortawesome/free-solid-svg-icons';
 import { useAuth } from '../../hooks/useAuth';
-import { ROLES, ROLE_HOME_ROUTES } from '../../constants/roles';
+import { ROLE_HOME_ROUTES } from '../../constants/roles';
 import { ROUTES } from '../../constants/routes';
 import Button from '../../components/common/Button';
+import GoogleSignInButton from '../../components/auth/GoogleSignInButton';
 
 export const LoginPage = () => {
   const [showPassword, setShowPassword] = useState(false);
-  const [authError, setAuthError] = useState('');
-  const { login, switchDemoRole, isLoading } = useAuth();
-  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const location = useLocation();
+  const initialOAuthError = searchParams.get('error') || location.state?.error || '';
+  const [authError, setAuthError] = useState(initialOAuthError);
+  const { login, isLoading } = useAuth();
+  const navigate = useNavigate();
+
+  const statusMessage = location.state?.message || '';
 
   const {
     register,
     handleSubmit,
-    setValue,
     formState: { errors, isSubmitting },
   } = useForm({
     defaultValues: {
-      identifier: 'tanvir@khelahobe.bd',
-      password: 'password123',
+      identifier: '',
+      password: '',
       rememberMe: true,
     },
   });
@@ -38,7 +40,7 @@ export const LoginPage = () => {
   const onSubmit = async (data) => {
     setAuthError('');
     const result = await login({
-      identifier: data.identifier,
+      email: data.identifier,
       password: data.password,
       rememberMe: data.rememberMe,
     });
@@ -53,30 +55,6 @@ export const LoginPage = () => {
     }
   };
 
-  const handleDemoLogin = (role) => {
-    setAuthError('');
-    switchDemoRole(role);
-    const destination = ROLE_HOME_ROUTES[role] || ROUTES.PLAYER_DASHBOARD;
-    navigate(destination, { replace: true });
-  };
-
-  const setDemoCredentials = (role) => {
-    setAuthError('');
-    if (role === ROLES.PLAYER) {
-      setValue('identifier', 'tanvir@khelahobe.bd');
-      setValue('password', 'password123');
-    } else if (role === ROLES.ORGANIZER) {
-      setValue('identifier', 'rafiq@khelahobe.bd');
-      setValue('password', 'password123');
-    } else if (role === ROLES.GUARDIAN) {
-      setValue('identifier', 'nusrat@khelahobe.bd');
-      setValue('password', 'password123');
-    } else if (role === ROLES.ADMIN) {
-      setValue('identifier', 'admin@khelahobe.bd');
-      setValue('password', 'adminpass123');
-    }
-  };
-
   return (
     <div className="w-full max-w-md flex flex-col gap-6">
       <section className="rounded-lg bg-light-surface dark:bg-dark-surface border border-light-border dark:border-dark-border p-6 sm:p-8 flex flex-col gap-6 shadow-sm">
@@ -86,56 +64,16 @@ export const LoginPage = () => {
             Welcome Back
           </h1>
           <p className="font-body text-body-md text-light-muted dark:text-dark-muted">
-            Sign in to one account for Player, Organizer, and Guardian workspaces.
+            Sign in to your Khela Hobe account for Player, Organizer, and Guardian workspaces.
           </p>
         </div>
 
-        {/* Demo Fast-Switch Utility */}
-        <div className="p-3.5 rounded-md bg-light-surface-elevated dark:bg-dark-surface-elevated border border-light-border dark:border-dark-border flex flex-col gap-2">
-          <div className="flex items-center justify-between text-xs font-label font-semibold text-secondary dark:text-primary">
-            <span className="flex items-center gap-1.5">
-              <FontAwesomeIcon icon={faUserGroup} className="text-xs" />
-              Demo Workspaces:
-            </span>
-            <span className="text-[11px] text-light-muted dark:text-dark-muted font-normal">
-              Click to autofill or sign in
-            </span>
+        {/* Registration / Status Banner */}
+        {statusMessage && !authError && (
+          <div className="p-3 rounded-md bg-success/10 border border-success/20 text-success text-xs font-body">
+            {statusMessage}
           </div>
-          <div className="grid grid-cols-4 gap-1.5">
-            <button
-              type="button"
-              onClick={() => handleDemoLogin(ROLES.PLAYER)}
-              className="py-1.5 px-2 rounded text-xs font-label font-semibold text-center bg-light-surface dark:bg-dark-surface hover:border-primary border border-light-border dark:border-dark-border text-light-on-background dark:text-dark-on-background transition-colors"
-              title="Click to sign in instantly as Player"
-            >
-              Player
-            </button>
-            <button
-              type="button"
-              onClick={() => handleDemoLogin(ROLES.ORGANIZER)}
-              className="py-1.5 px-2 rounded text-xs font-label font-semibold text-center bg-light-surface dark:bg-dark-surface hover:border-primary border border-light-border dark:border-dark-border text-light-on-background dark:text-dark-on-background transition-colors"
-              title="Click to sign in instantly as Organizer"
-            >
-              Organizer
-            </button>
-            <button
-              type="button"
-              onClick={() => handleDemoLogin(ROLES.GUARDIAN)}
-              className="py-1.5 px-2 rounded text-xs font-label font-semibold text-center bg-light-surface dark:bg-dark-surface hover:border-primary border border-light-border dark:border-dark-border text-light-on-background dark:text-dark-on-background transition-colors"
-              title="Click to sign in instantly as Guardian"
-            >
-              Guardian
-            </button>
-            <button
-              type="button"
-              onClick={() => handleDemoLogin(ROLES.ADMIN)}
-              className="py-1.5 px-2 rounded text-xs font-label font-semibold text-center bg-light-surface dark:bg-dark-surface hover:border-primary border border-light-border dark:border-dark-border text-light-on-background dark:text-dark-on-background transition-colors"
-              title="Click to sign in instantly as Admin"
-            >
-              Admin
-            </button>
-          </div>
-        </div>
+        )}
 
         {/* Global Error Banner */}
         {authError && (
@@ -147,22 +85,22 @@ export const LoginPage = () => {
 
         {/* Login Form */}
         <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
-          {/* Email or Phone Input */}
+          {/* Email Input */}
           <label className="flex flex-col gap-1.5">
             <span className="font-label text-label-md font-medium text-light-on-surface dark:text-dark-on-surface">
-              Email or Phone Number
+              Email Address
             </span>
             <input
-              type="text"
-              autoComplete="username"
-              placeholder="tanvir@khelahobe.bd or +880 17..."
+              type="email"
+              autoComplete="email"
+              placeholder="you@example.com"
               className={`w-full px-3.5 py-2.5 rounded-md bg-light-background dark:bg-dark-background border font-body text-body-md text-light-on-background dark:text-dark-on-background focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus:border-primary transition-colors ${
                 errors.identifier
                   ? 'border-error focus-visible:ring-error focus:border-error'
                   : 'border-light-border dark:border-dark-border'
               }`}
               {...register('identifier', {
-                required: 'Please enter your email or phone number',
+                required: 'Please enter your email address',
               })}
             />
             {errors.identifier && (
@@ -245,6 +183,16 @@ export const LoginPage = () => {
             Sign In
           </Button>
         </form>
+
+        <div className="relative flex items-center justify-center">
+          <span className="h-px flex-1 bg-light-border dark:bg-dark-border" />
+          <span className="px-3 text-xs font-label text-light-muted dark:text-dark-muted uppercase">
+            Or
+          </span>
+          <span className="h-px flex-1 bg-light-border dark:bg-dark-border" />
+        </div>
+
+        <GoogleSignInButton label="Continue with Google" />
 
         {/* Create Account Link */}
         <p className="font-body text-body-sm text-light-muted dark:text-dark-muted text-center pt-2 border-t border-light-border dark:border-dark-border">

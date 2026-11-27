@@ -38,8 +38,8 @@ export const MobileNavigation = ({ onOpenDrawer, className = '' }) => {
 
   return (
     <>
-      {/* Mobile Top Header (Fixed at top on screens < 768px) */}
-      <header className="md:hidden sticky top-0 z-40 h-14 px-4 bg-light-surface/90 dark:bg-dark-surface/90 backdrop-blur-md border-b border-light-border dark:border-dark-border flex items-center justify-between">
+      {/* Mobile Top Header */}
+      <header className="md:hidden h-14 px-4 bg-light-surface dark:bg-dark-surface border-b border-light-border dark:border-dark-border flex items-center justify-between">
         <Link to={ROUTES.HOME} className="flex items-center gap-2">
           <span className="w-8 h-8 rounded-md bg-primary text-on-primary flex items-center justify-center font-bold">
             <FontAwesomeIcon icon={faFutbol} className="text-sm" />

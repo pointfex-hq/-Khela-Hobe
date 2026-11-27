@@ -62,18 +62,18 @@ export const AboutUsPage = () => {
               alt="Players competing under floodlights at a Dhaka futsal turf"
               className="w-full h-64 sm:h-72 object-cover"
             />
-            <div className="p-5 grid grid-cols-3 gap-4 border-t border-light-border dark:border-dark-border">
+            <div className="p-4 sm:p-5 grid grid-cols-3 gap-2.5 sm:gap-4 border-t border-light-border dark:border-dark-border">
               <div>
-                <p className="font-headline font-bold text-2xl tabular-nums text-primary">12+</p>
-                <p className="font-body text-xs text-light-muted dark:text-dark-muted mt-0.5">Active sports</p>
+                <p className="font-headline font-bold text-xl sm:text-2xl tabular-nums text-primary">12+</p>
+                <p className="font-body text-[11px] sm:text-xs text-light-muted dark:text-dark-muted mt-0.5">Active sports</p>
               </div>
               <div>
-                <p className="font-headline font-bold text-2xl tabular-nums text-light-on-surface dark:text-dark-on-surface">64</p>
-                <p className="font-body text-xs text-light-muted dark:text-dark-muted mt-0.5">Districts supported</p>
+                <p className="font-headline font-bold text-xl sm:text-2xl tabular-nums text-light-on-surface dark:text-dark-on-surface">64</p>
+                <p className="font-body text-[11px] sm:text-xs text-light-muted dark:text-dark-muted mt-0.5">Districts supported</p>
               </div>
               <div>
-                <p className="font-headline font-bold text-2xl tabular-nums text-success">98%</p>
-                <p className="font-body text-xs text-light-muted dark:text-dark-muted mt-0.5">Match show-up</p>
+                <p className="font-headline font-bold text-xl sm:text-2xl tabular-nums text-success">98%</p>
+                <p className="font-body text-[11px] sm:text-xs text-light-muted dark:text-dark-muted mt-0.5">Match show-up</p>
               </div>
             </div>
           </div>

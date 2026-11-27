@@ -1,0 +1,57 @@
+# KHELA HOBE — INITIAL TEST ACCOUNT SETUP
+
+Before final testing, create predefined test accounts for PLAYER, ORGANIZER, and ADMIN roles so the application can be tested without manually registering and promoting users.
+
+### 1. Create These Test Accounts
+
+| Role | Name | Email |
+|---|---|---|
+| PLAYER | Test Player | player@khelahobe.com |
+| ORGANIZER | Test Organizer | organizer@khelahobe.com |
+| ADMIN | Test Admin | admin@khelahobe.com |
+
+Use a common development-only password configured through environment variables, or generate separate temporary passwords and document them securely.
+
+### 2. Implementation Requirements
+
+1. Inspect the existing authentication, user, role, and database models before implementation.
+2. Create an idempotent database seed script that creates these accounts if they do not already exist.
+3. Assign roles directly through the database using the existing role-management system.
+4. Ensure the ORGANIZER account has an approved organizer status and can access organizer features immediately.
+5. Ensure the ADMIN account has full administrative permissions.
+6. Ensure the PLAYER account has only normal player permissions.
+7. Hash all passwords using the same secure password-hashing mechanism used by the application.
+8. Ensure all three accounts can log in through the existing frontend login page.
+9. Verify role-based dashboards, protected routes, and backend API permissions for each account.
+10. Do not bypass authentication or authorization to make these accounts work.
+
+### 3. Security Restrictions
+
+- Seed accounts must only be created in development or explicitly authorized testing environments.
+- Never create these accounts automatically in production.
+- Never hardcode plaintext passwords or production credentials in source code.
+- Do not expose admin credentials in frontend code or public API responses.
+- Do not create a public admin registration endpoint.
+- Admin privileges must only be assigned through trusted server-side provisioning.
+- Make the seed operation safe to run multiple times without creating duplicate accounts.
+
+### 4. Testing
+
+After creating the accounts:
+
+- Log in as PLAYER and verify player functionality.
+- Log in as ORGANIZER and verify organizer functionality.
+- Log in as ADMIN and verify admin functionality.
+- Attempt unauthorized operations between roles and confirm they are rejected by the backend.
+- Verify logout and session isolation when switching accounts.
+
+### 5. Deliverables
+
+Provide:
+- Seed script and execution command.
+- Test account email addresses and development login credentials.
+- Confirmation that all three accounts were created successfully.
+- Role and permission verification results.
+- Any database migration or configuration changes.
+
+**Important:** This is temporary test infrastructure for initial QA. Do not weaken the production authentication or authorization system.

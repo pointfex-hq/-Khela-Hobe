@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
   faLocationDot,
@@ -18,49 +18,67 @@ import { useAuth } from '../../hooks/useAuth';
 import { ROUTES } from '../../constants/routes';
 import { matchService } from '../../services/endpoints/matchService';
 import { playerService } from '../../services/endpoints/playerService';
+import { useAppStore } from '../../store/useAppStore';
+import { haversineDistanceKm } from '../../utils/formatters';
 import Button from '../../components/common/Button';
 import toast from 'react-hot-toast';
 
 export const PlayerHomePage = () => {
   const { user } = useAuth();
-  const navigate = useNavigate();
 
   const [selectedSport, setSelectedSport] = useState('All Sports');
-  const [matches, setMatches] = useState([]);
+  const rawMatches = useAppStore((s) => s.matches);
+  const fetchMatches = useAppStore((s) => s.fetchMatches);
+  const loading = useAppStore((s) => s.matchesLoading);
+  const userLocation = useAppStore((s) => s.userLocation);
+  const detectUserLocation = useAppStore((s) => s.detectUserLocation);
   const [schedule, setSchedule] = useState([]);
-  const [loading, setLoading] = useState(true);
 
   const sportsPills = ['All Sports', 'Football', 'Badminton', 'Cricket', 'Basketball'];
 
   useEffect(() => {
-    const loadHomeData = async () => {
-      setLoading(true);
-      try {
-        const [matchesRes, scheduleRes] = await Promise.all([
-          matchService.getMatches({ sport: selectedSport }),
-          playerService.getPlayerUpcomingSchedule(),
-        ]);
-        setMatches(matchesRes.data || []);
-        setSchedule(scheduleRes.data || []);
-      } catch (err) {
-        console.error('Failed to load player home data', err);
-      } finally {
-        setLoading(false);
-      }
-    };
+    fetchMatches();
+    detectUserLocation();
+    playerService
+      .getPlayerUpcomingSchedule(user?.id)
+      .then((res) => setSchedule(res.data || []))
+      .catch(() => {});
+  }, [fetchMatches, detectUserLocation, user?.id]);
 
-    loadHomeData();
-  }, [selectedSport]);
+  // Filter & prioritize nearest user location in-memory without re-querying DB
+  const matches = useMemo(() => {
+    let list = (rawMatches || []).filter(
+      (m) => m.state !== 'cancelled' && m.status !== 'CANCELLED'
+    );
+    if (selectedSport && selectedSport !== 'All Sports') {
+      const q = selectedSport.toLowerCase();
+      list = list.filter(
+        (m) => m.sport?.toLowerCase().includes(q) || m.sportCategory?.toLowerCase().includes(q)
+      );
+    }
+    if (userLocation?.lat && userLocation?.lng) {
+      list = [...list].sort((a, b) => {
+        const dA =
+          haversineDistanceKm(userLocation.lat, userLocation.lng, a.coordinates?.lat, a.coordinates?.lng) ??
+          9999;
+        const dB =
+          haversineDistanceKm(userLocation.lat, userLocation.lng, b.coordinates?.lat, b.coordinates?.lng) ??
+          9999;
+        return dA - dB;
+      });
+    }
+    return list;
+  }, [rawMatches, selectedSport, userLocation]);
 
   const handleJoinMatch = async (match) => {
     try {
-      const res = await matchService.joinMatch(match.id);
+      const res = await matchService.joinMatch(match.id, {
+        mode: match.mode,
+        isApprovalRequired: match.joinMode === 'Approval Required',
+      });
       toast.success(res.message || 'Action completed successfully');
-      // Refresh list
-      const updated = await matchService.getMatches({ sport: selectedSport });
-      setMatches(updated.data || []);
-    } catch {
-      toast.error('Failed to process match action');
+    } catch (err) {
+      toast.error(err?.message || 'Failed to process match action');
     }
   };
 
@@ -78,10 +96,12 @@ export const PlayerHomePage = () => {
         <div className="flex flex-col gap-1">
           <div className="flex items-center gap-2 text-light-muted dark:text-dark-muted">
             <FontAwesomeIcon icon={faLocationDot} className="text-primary text-sm" />
-            <span className="font-label text-label-md">Gazipur &amp; Dhaka North • Asia/Dhaka</span>
+            <span className="font-label text-label-md">
+              {userLocation ? 'Near Your Location' : user?.area || user?.city || 'Dhaka'} • Asia/Dhaka
+            </span>
           </div>
           <h1 className="font-headline text-headline-lg font-bold text-light-on-background dark:text-dark-on-background tracking-tight">
-            Ready to play, {user?.name?.split(' ')[0] || 'Tanvir'}?
+            Ready to play, {user?.name?.split(' ')[0] || 'Player'}?
           </h1>
         </div>
 

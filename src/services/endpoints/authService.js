@@ -1,181 +1,152 @@
 import apiClient from '../api/apiClient';
-import { MOCK_USERS } from '../../mocks/mockData';
-import { ROLES } from '../../constants/roles';
 import { tokenService } from '../../utils/tokenService';
+import { unwrapEnvelope, normalizeUser } from '../../utils/dtoMappers';
 
 /**
- * Authentication Service
- * Communicates with /auth endpoints with seamless fallback for offline demo development.
- * Storage abstraction prevents plaintext credentials in localStorage.
+ * Authentication Service — strictly backed by /auth REST endpoints
  */
 export const authService = {
-  /**
-   * Authenticate user with email/phone and password
-   */
   login: async (credentials) => {
-    try {
-      const response = await apiClient.post('/auth/login', credentials);
-      if (response.data?.accessToken) {
-        tokenService.setTokens(response.data.accessToken, response.data.refreshToken);
-      }
-      return response.data;
-    } catch {
-      // Offline / Demo fallback
-      const identifier = (credentials?.identifier || credentials?.email || '').toLowerCase();
-      let targetRole = credentials?.role;
+    const email = (credentials?.email || credentials?.identifier || '').trim();
+    const password = credentials?.password || '';
 
-      if (!targetRole) {
-        if (identifier.includes('admin')) {
-          targetRole = ROLES.ADMIN;
-        } else if (identifier.includes('rafiq') || identifier.includes('org')) {
-          targetRole = ROLES.ORGANIZER;
-        } else if (identifier.includes('nusrat') || identifier.includes('guardian')) {
-          targetRole = ROLES.GUARDIAN;
-        } else {
-          targetRole = ROLES.PLAYER;
-        }
-      }
+    const response = await apiClient.post('/auth/login', { email, password });
+    const session = unwrapEnvelope(response);
 
-      const user = MOCK_USERS[targetRole] || MOCK_USERS[ROLES.PLAYER];
-      const mockToken = `mock.jwt.token.${targetRole.toLowerCase()}`;
-      const mockRefreshToken = `${mockToken}.refresh`;
-      
-      tokenService.setTokens(mockToken, mockRefreshToken);
-
-      return {
-        success: true,
-        accessToken: mockToken,
-        refreshToken: mockRefreshToken,
-        user,
-      };
+    if (!session?.accessToken || !session?.user) {
+      throw new Error('Login response missing accessToken or user');
     }
+
+    tokenService.setTokens(session.accessToken, session.refreshToken);
+    return {
+      success: true,
+      ...session,
+      user: normalizeUser(session.user),
+    };
   },
 
-  /**
-   * Register a new user
-   */
   register: async (userData) => {
-    try {
-      const response = await apiClient.post('/auth/register', userData);
-      if (response.data?.accessToken) {
-        tokenService.setTokens(response.data.accessToken, response.data.refreshToken);
-      }
-      return response.data;
-    } catch {
-      // Offline fallback
-      const targetRole = userData.role || ROLES.PLAYER;
-      const user = {
-        id: `usr_${Date.now()}`,
-        name: userData.name || 'New Member',
-        email: userData.email,
-        phone: userData.phone || '',
-        dateOfBirth: userData.dateOfBirth || '',
-        role: targetRole,
-        city: 'Dhaka',
-        preferredSports: ['Football'],
-        matchesPlayed: 0,
-        reputation: 100,
-        avatar: '/src/assets/images/avatar_tanvir.png',
-      };
-      
-      const mockToken = `mock.jwt.token.${targetRole.toLowerCase()}`;
-      const mockRefreshToken = `${mockToken}.refresh`;
-      tokenService.setTokens(mockToken, mockRefreshToken);
-
-      return {
-        success: true,
-        accessToken: mockToken,
-        refreshToken: mockRefreshToken,
-        user,
-      };
+    const payload = {
+      fullName: (userData.fullName || userData.name || '').trim(),
+      email: (userData.email || '').trim(),
+      password: userData.password,
+      role: userData.role === 'ORGANIZER' ? 'ORGANIZER' : 'PLAYER',
+    };
+    const rawPhone = (userData.phoneNumber || userData.phone || '').trim().replace(/[\s-]/g, '');
+    if (rawPhone) {
+      payload.phoneNumber = rawPhone;
     }
+
+    const response = await apiClient.post('/auth/register', payload);
+    const session = unwrapEnvelope(response);
+
+    if (session?.accessToken) {
+      tokenService.setTokens(session.accessToken, session.refreshToken);
+    }
+
+    return {
+      success: true,
+      ...session,
+      user: session?.user ? normalizeUser(session.user) : null,
+    };
   },
 
-  /**
-   * Invalidate current user session
-   */
+  verifyEmailOtp: async ({ code, email } = {}) => {
+    const response = await apiClient.post('/auth/verify-email', { code, ...(email ? { email } : {}) });
+    const data = unwrapEnvelope(response);
+    return {
+      success: true,
+      ...data,
+      user: data?.user ? normalizeUser(data.user) : null,
+    };
+  },
+
+  resendEmailOtp: async (email) => {
+    const response = await apiClient.post('/auth/resend-otp', email ? { email } : {});
+    return unwrapEnvelope(response);
+  },
+
   logout: async () => {
     try {
-      await apiClient.post('/auth/logout');
+      if (tokenService.getAccessToken()) {
+        await apiClient.post('/auth/logout');
+      }
     } catch {
-      // Local clean-up even if offline
+      // Clear local session regardless of network outcome
     } finally {
       tokenService.clearTokens();
     }
     return { success: true };
   },
 
-  /**
-   * Fetch currently authenticated user
-   */
   getCurrentUser: async () => {
-    try {
-      const response = await apiClient.get('/auth/me');
-      return response.data;
-    } catch {
-      // Determine user from stored token
-      const token = tokenService.getAccessToken();
-      if (!token) return null;
-      if (token.includes('admin')) return MOCK_USERS[ROLES.ADMIN];
-      if (token.includes('organizer')) return MOCK_USERS[ROLES.ORGANIZER];
-      if (token.includes('guardian')) return MOCK_USERS[ROLES.GUARDIAN];
-      return MOCK_USERS[ROLES.PLAYER];
-    }
+    const token = tokenService.getAccessToken();
+    if (!token) return null;
+    const response = await apiClient.get('/auth/me');
+    return normalizeUser(unwrapEnvelope(response));
   },
 
-  /**
-   * Refresh JWT authentication tokens
-   */
   refreshToken: async () => {
     const currentRefresh = tokenService.getRefreshToken();
-    try {
-      const response = await apiClient.post('/auth/refresh', { refreshToken: currentRefresh });
-      if (response.data?.accessToken) {
-        tokenService.setTokens(response.data.accessToken, response.data.refreshToken);
-        return response.data;
-      }
-    } catch {
-      // Offline fallback: generate refreshed token
-      const currentAccess = tokenService.getAccessToken() || 'mock.jwt.token.player';
-      const newAccessToken = `${currentAccess.split('.refreshed')[0]}.refreshed_${Date.now()}`;
-      const newRefreshToken = `${newAccessToken}.refresh`;
-      tokenService.setTokens(newAccessToken, newRefreshToken);
-      return {
-        success: true,
-        accessToken: newAccessToken,
-        refreshToken: newRefreshToken,
-      };
+    if (!currentRefresh) {
+      throw new Error('No refresh token available');
     }
+
+    const response = await apiClient.post('/auth/refresh', { refreshToken: currentRefresh });
+    const session = unwrapEnvelope(response);
+
+    if (!session?.accessToken) {
+      throw new Error('Refresh response missing accessToken');
+    }
+
+    tokenService.setTokens(session.accessToken, session.refreshToken || currentRefresh);
+    return {
+      success: true,
+      ...session,
+      user: session.user ? normalizeUser(session.user) : undefined,
+    };
   },
 
-  /**
-   * Request password reset code
-   */
   forgotPassword: async (identifier) => {
-    try {
-      const response = await apiClient.post('/auth/forgot-password', { identifier });
-      return response.data;
-    } catch {
-      return {
-        success: true,
-        message: 'A 6-digit recovery code has been sent to your email or phone.',
-      };
-    }
+    const response = await apiClient.post('/auth/forgot-password', { identifier });
+    return unwrapEnvelope(response);
   },
 
-  /**
-   * Reset password with verification code
-   */
   resetPassword: async ({ code, password }) => {
-    try {
-      const response = await apiClient.post('/auth/reset-password', { code, password });
-      return response.data;
-    } catch {
-      return {
-        success: true,
-        message: 'Your password has been successfully reset. Please sign in.',
-      };
+    const response = await apiClient.post('/auth/reset-password', { code, password });
+    return unwrapEnvelope(response);
+  },
+
+  getGoogleAuthUrl: async ({ mode = 'login', role, returnTo } = {}) => {
+    const params = { mode };
+    if (role) params.role = role;
+    if (returnTo) params.returnTo = returnTo;
+    const response = await apiClient.get('/auth/google/url', { params });
+    return unwrapEnvelope(response);
+  },
+
+  completeGoogleLogin: async (code) => {
+    const response = await apiClient.post('/auth/google/exchange', { code });
+    const session = unwrapEnvelope(response);
+
+    if (!session?.accessToken || !session?.user) {
+      throw new Error('Google authentication failed to return session tokens');
     }
+
+    tokenService.setTokens(session.accessToken, session.refreshToken);
+    return {
+      success: true,
+      ...session,
+      user: normalizeUser(session.user),
+    };
+  },
+
+  unlinkGoogleAccount: async () => {
+    const response = await apiClient.delete('/auth/google/link');
+    return {
+      success: true,
+      user: normalizeUser(unwrapEnvelope(response)),
+    };
   },
 };
 

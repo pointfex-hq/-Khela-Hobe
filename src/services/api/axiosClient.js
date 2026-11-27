@@ -1,6 +1,6 @@
 import axios from 'axios';
-import { ENV, API_CONFIG } from '../../constants/config';
-import { tokenStorage } from './tokenStorage';
+import { ENV, API_CONFIG, STORAGE_KEYS } from '../../constants/config';
+import { tokenStorage, isValidToken } from './tokenStorage';
 import { handleApiError } from './apiErrorHandler';
 
 /**
@@ -9,31 +9,52 @@ import { handleApiError } from './apiErrorHandler';
 export const axiosClient = axios.create({
   baseURL: ENV.API_BASE_URL,
   timeout: API_CONFIG.TIMEOUT_MS,
+  withCredentials: false,
   headers: {
+    'Content-Type': 'application/json',
     Accept: 'application/json',
   },
 });
 
 let isRefreshing = false;
-let failedQueue = [];
+let pendingQueue = [];
 
-const processQueue = (error, token = null) => {
-  failedQueue.forEach((prom) => {
-    if (error) {
-      prom.reject(error);
+const flushQueue = (error, token = null) => {
+  pendingQueue.forEach(({ resolve, reject }) => {
+    if (error || !token) {
+      reject(error || new Error('Session refresh failed'));
     } else {
-      prom.resolve(token);
+      resolve(token);
     }
   });
-  failedQueue = [];
+  pendingQueue = [];
 };
 
-// Request Interceptor: Attach JWT token and adjust content types
+const redirectToLogin = () => {
+  tokenStorage.clearTokens();
+  if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
+    window.location.href = '/login';
+  }
+};
+
+// Request Interceptor: Attach Bearer JWT token when valid
 axiosClient.interceptors.request.use(
   (config) => {
-    const token = tokenStorage.getAccessToken();
-    if (token && !config.headers.Authorization) {
-      config.headers.Authorization = `Bearer ${token}`;
+    const rawToken =
+      typeof window !== 'undefined'
+        ? window.localStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN)
+        : null;
+
+    config.headers = config.headers ?? {};
+
+    if (isValidToken(rawToken)) {
+      config.headers.Authorization = `Bearer ${rawToken}`;
+    } else {
+      if (rawToken !== null) {
+        // Clean up corrupted placeholders like "undefined" or "null"
+        tokenStorage.clearTokens();
+      }
+      delete config.headers.Authorization;
     }
 
     // Allow multipart/form-data for FormData without overriding boundary
@@ -48,59 +69,93 @@ axiosClient.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
-// Response Interceptor: Handle 401 token refresh and normalize errors
+// Response Interceptor: Refresh on 401, bounce on /auth/me 401/403, normalize errors
 axiosClient.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
+    const status = error.response?.status;
+    const reqUrl = originalRequest?.url || '';
 
-    // Orchestrate automatic 401 refresh token flow
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    if (
+      status === 401 &&
+      originalRequest &&
+      !originalRequest._retry &&
+      !reqUrl.includes('/auth/refresh') &&
+      !reqUrl.includes('/auth/login') &&
+      !reqUrl.includes('/auth/register')
+    ) {
+      originalRequest._retry = true;
+      const refreshToken = tokenStorage.getRefreshToken();
+
+      if (!isValidToken(refreshToken)) {
+        redirectToLogin();
+        return Promise.reject(handleApiError(error));
+      }
+
       if (isRefreshing) {
         return new Promise((resolve, reject) => {
-          failedQueue.push({ resolve, reject });
+          pendingQueue.push({ resolve, reject });
         })
-          .then((token) => {
-            originalRequest.headers.Authorization = `Bearer ${token}`;
+          .then((newToken) => {
+            originalRequest.headers = originalRequest.headers ?? {};
+            originalRequest.headers.Authorization = `Bearer ${newToken}`;
             return axiosClient(originalRequest);
           })
           .catch((err) => Promise.reject(err));
       }
 
-      originalRequest._retry = true;
       isRefreshing = true;
-
-      const refreshToken = tokenStorage.getRefreshToken();
-      if (!refreshToken) {
-        tokenStorage.clearTokens();
-        isRefreshing = false;
-        return Promise.reject(handleApiError(error));
-      }
-
       try {
-        const response = await axios.post(`${ENV.API_BASE_URL}/auth/refresh`, {
-          refreshToken,
-        });
+        const refreshRes = await axios.post(
+          `${ENV.API_BASE_URL}/auth/refresh`,
+          { refreshToken },
+          { headers: { 'Content-Type': 'application/json', Accept: 'application/json' } }
+        );
 
-        const { accessToken, newRefreshToken } = response.data;
-        tokenStorage.setTokens(accessToken, newRefreshToken || refreshToken);
+        const payload = refreshRes.data?.data ?? refreshRes.data;
+        const newAccess = payload?.accessToken;
+        const newRefresh = payload?.refreshToken ?? refreshToken;
 
-        axiosClient.defaults.headers.common.Authorization = `Bearer ${accessToken}`;
-        originalRequest.headers.Authorization = `Bearer ${accessToken}`;
+        if (!isValidToken(newAccess)) {
+          throw new Error('Refresh response missing valid accessToken');
+        }
 
-        processQueue(null, accessToken);
+        tokenStorage.setTokens(newAccess, newRefresh);
+        axiosClient.defaults.headers.common.Authorization = `Bearer ${newAccess}`;
+        originalRequest.headers = originalRequest.headers ?? {};
+        originalRequest.headers.Authorization = `Bearer ${newAccess}`;
+
+        flushQueue(null, newAccess);
         return axiosClient(originalRequest);
       } catch (refreshError) {
-        processQueue(refreshError, null);
-        tokenStorage.clearTokens();
+        flushQueue(refreshError, null);
+        redirectToLogin();
         return Promise.reject(handleApiError(refreshError));
       } finally {
         isRefreshing = false;
       }
     }
 
+    // Direct 401/403 on /auth/me — clear tokens and bounce to /login
+    if ((status === 401 || status === 403) && reqUrl.includes('/auth/me')) {
+      redirectToLogin();
+    }
+
     return Promise.reject(handleApiError(error));
   }
 );
+
+/**
+ * Envelope-returning helpers matching the Frontend Alignment Guide:
+ * api.get(url) returns ApiResponse<T> ({ success, data, timestamp })
+ */
+export const api = {
+  get: (url, cfg) => axiosClient.get(url, cfg).then((r) => r.data),
+  post: (url, data, cfg) => axiosClient.post(url, data, cfg).then((r) => r.data),
+  patch: (url, data, cfg) => axiosClient.patch(url, data, cfg).then((r) => r.data),
+  put: (url, data, cfg) => axiosClient.put(url, data, cfg).then((r) => r.data),
+  delete: (url, cfg) => axiosClient.delete(url, cfg).then((r) => r.data),
+};
 
 export default axiosClient;

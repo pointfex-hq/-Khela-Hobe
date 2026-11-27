@@ -21,6 +21,8 @@ import {
 import { profileService } from '../../services/endpoints/profileService';
 import Modal from '../../components/modals/Modal';
 import LoadingSpinner from '../../components/feedback/LoadingSpinner';
+import GoogleAccountCard from '../../components/auth/GoogleAccountCard';
+import DeleteAccountCard from '../../components/auth/DeleteAccountCard';
 import { toastService } from '../../components/feedback/toastService';
 import { ROUTES } from '../../constants/routes';
 
@@ -52,7 +54,7 @@ export const OrganizerProfilePage = () => {
         reset({
           name: res.data.name || '',
           organization: res.data.organization || '',
-          area: res.data.area || 'Banani / Gulshan, Dhaka',
+          area: res.data.area || '',
           bio: res.data.bio || '',
           phone: res.data.phone || '',
         });
@@ -85,8 +87,8 @@ export const OrganizerProfilePage = () => {
         setAvatarUrl(res.url);
         toastService.success('Organizer photo updated!');
       }
-    } catch {
-      toastService.error('Failed to upload image.');
+    } catch (err) {
+      toastService.error(err?.message || 'Failed to upload image.');
     } finally {
       setUploadingImage(false);
     }
@@ -97,17 +99,22 @@ export const OrganizerProfilePage = () => {
     setSaving(true);
     try {
       const payload = {
-        ...formData,
-        avatar: avatarUrl,
+        fullName: formData.name,
+        area: formData.area,
+        bio: formData.bio,
+        phoneNumber: formData.phone,
       };
+      if (avatarUrl && !avatarUrl.startsWith('blob:')) {
+        payload.profileImageUrl = avatarUrl;
+      }
       const res = await profileService.updateOrganizerProfile(payload);
       if (res?.success) {
-        setProfile(res.data);
+        setProfile((prev) => ({ ...(prev || {}), ...res.data }));
         setIsEditModalOpen(false);
         toastService.success('Organizer profile updated successfully!');
       }
-    } catch {
-      toastService.error('Failed to update organizer profile.');
+    } catch (err) {
+      toastService.error(err?.message || 'Failed to update organizer profile.');
     } finally {
       setSaving(false);
     }
@@ -121,10 +128,11 @@ export const OrganizerProfilePage = () => {
     );
   }
 
-  const stats = profile?.stats || {
-    matchesHosted: 42,
-    completionRate: 98,
-    playerRating: 4.9,
+  const stats = {
+    matchesHosted: profile?.stats?.matchesOrganized ?? profile?.stats?.matchesHosted ?? 0,
+    completionRate: profile?.stats?.showUpRate ?? profile?.stats?.completionRate ?? 100,
+    playerRating: profile?.ratings?.organizerRatingAvg ?? profile?.stats?.playerRating ?? 0,
+    ratingCount: profile?.ratings?.organizerRatingCount ?? 0,
   };
 
   const upcoming = profile?.upcomingMatches || [];
@@ -160,21 +168,24 @@ export const OrganizerProfilePage = () => {
         </button>
       </header>
 
-      {/* Organizer Identity Card (Reference: UIUX/organizer_profile/code.html lines 129-158) */}
-      <section className="rounded-lg bg-light-surface dark:bg-dark-surface border border-light-border dark:border-dark-border p-6 flex flex-col md:flex-row md:items-center justify-between gap-6 shadow-sm">
+      {/* Organizer Identity Card */}
+      <section className="rounded-lg bg-light-surface dark:bg-dark-surface border border-light-border dark:border-dark-border p-4 sm:p-6 flex flex-col md:flex-row md:items-center justify-between gap-5 sm:gap-6 shadow-sm">
         <div className="flex flex-col sm:flex-row sm:items-center gap-5">
-          <img
-            src={
-              profile?.avatar ||
-              'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80'
-            }
-            alt={profile?.name || 'Tanvir Hasan'}
-            className="w-20 h-20 rounded-full object-cover border-2 border-primary ring-4 ring-primary/10 shadow-sm shrink-0"
-          />
+          {profile?.avatar ? (
+            <img
+              src={profile.avatar}
+              alt={profile?.name || 'Organizer'}
+              className="w-20 h-20 rounded-full object-cover border-2 border-primary ring-4 ring-primary/10 shadow-sm shrink-0"
+            />
+          ) : (
+            <div className="w-20 h-20 rounded-full bg-primary/15 text-primary border-2 border-primary ring-4 ring-primary/10 shadow-sm shrink-0 flex items-center justify-center font-headline text-2xl font-bold uppercase">
+              {(profile?.name || profile?.email || 'O').charAt(0)}
+            </div>
+          )}
           <div className="flex flex-col gap-1.5">
             <div className="flex flex-wrap items-center gap-2.5">
               <h1 className="font-headline text-headline-lg font-bold tracking-tight">
-                {profile?.name || 'Tanvir Hasan'}
+                {profile?.name || 'Organizer'}
               </h1>
               <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-success text-on-success font-label text-label-sm font-semibold">
                 <FontAwesomeIcon icon={faCircleCheck} className="text-xs" />
@@ -185,22 +196,21 @@ export const OrganizerProfilePage = () => {
             <p className="font-body text-body-md text-light-muted dark:text-dark-muted flex flex-wrap items-center gap-1.5">
               <FontAwesomeIcon icon={faBuilding} className="text-secondary text-xs" />
               <span className="font-semibold text-light-on-surface dark:text-dark-on-surface">
-                {profile?.organization || 'North Dhaka Sports Collective'}
+                {profile?.organization || 'Community Match Organizer'}
               </span>
               <span>•</span>
               <FontAwesomeIcon icon={faLocationDot} className="text-primary text-xs" />
-              <span>{profile?.area || 'Banani / Gulshan, Dhaka'}</span>
+              <span>{profile?.area || profile?.city || 'Location not set'}</span>
             </p>
 
             <p className="font-body text-body-sm text-light-muted dark:text-dark-muted max-w-2xl mt-1">
-              {profile?.bio ||
-                'Organizing Football, Badminton & Turf Events across Dhaka North since 2024. Ensuring safe pitches, referees, and quality bibs.'}
+              {profile?.bio || 'No organizer bio added yet.'}
             </p>
           </div>
         </div>
 
         {/* 3 Metric Stat Counter */}
-        <div className="grid grid-cols-3 gap-6 border-t md:border-t-0 md:border-l border-light-border dark:border-dark-border pt-4 md:pt-0 md:pl-6 shrink-0 text-center md:text-left">
+        <div className="grid grid-cols-3 gap-2.5 sm:gap-6 border-t md:border-t-0 md:border-l border-light-border dark:border-dark-border pt-4 md:pt-0 md:pl-6 shrink-0 text-center md:text-left">
           <div>
             <p className="font-headline text-headline-md font-bold tabular-nums text-primary">
               {stats.matchesHosted}
@@ -219,11 +229,11 @@ export const OrganizerProfilePage = () => {
           </div>
           <div>
             <p className="font-headline text-headline-md font-bold tabular-nums flex items-center justify-center md:justify-start gap-1">
-              <span>{stats.playerRating}</span>
+              <span>{stats.playerRating > 0 ? Number(stats.playerRating).toFixed(1) : 'New'}</span>
               <FontAwesomeIcon icon={faStar} className="text-warning text-xs" />
             </p>
             <p className="font-body text-body-sm text-light-muted dark:text-dark-muted mt-0.5">
-              Player Rating
+              Player Rating ({stats.ratingCount})
             </p>
           </div>
         </div>
@@ -307,6 +317,10 @@ export const OrganizerProfilePage = () => {
           ))}
         </div>
       </section>
+
+      {/* Google Account Linking & Account Deletion (own profile) */}
+      {!organizerId && <GoogleAccountCard />}
+      {!organizerId && <DeleteAccountCard />}
 
       {/* Edit Organizer Profile Modal */}
       <Modal

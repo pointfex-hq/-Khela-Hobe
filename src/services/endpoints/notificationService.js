@@ -1,93 +1,70 @@
 import apiClient from '../api/apiClient';
-import { MOCK_NOTIFICATIONS } from '../../mocks/mockData';
-
-let notificationsList = [...MOCK_NOTIFICATIONS];
+import { unwrapEnvelope, normalizeNotification } from '../../utils/dtoMappers';
 
 export const notificationService = {
-  /**
-   * Get notifications by category (all, unread, matches, applications, safety, system)
-   */
-  getNotifications: async (category = 'all') => {
-    try {
-      const response = await apiClient.get('/notifications', { params: { category } });
-      return response.data;
-    } catch {
-      let results = [...notificationsList];
-      if (category === 'unread') {
-        results = results.filter((n) => !n.read);
-      } else if (category && category !== 'all') {
-        results = results.filter((n) => n.category === category);
-      }
-      return {
-        data: results,
-        total: results.length,
-        unreadCount: notificationsList.filter((n) => !n.read).length,
-      };
+  getNotifications: async (category = 'all', params = {}) => {
+    const response = await apiClient.get('/notifications', {
+      params: { page: params.page ?? 0, size: params.size ?? 20 },
+    });
+    const pageData = unwrapEnvelope(response);
+    const allItems = Array.isArray(pageData?.content)
+      ? pageData.content.map(normalizeNotification)
+      : Array.isArray(pageData)
+        ? pageData.map(normalizeNotification)
+        : [];
+
+    let results = allItems;
+    if (category === 'unread') {
+      results = allItems.filter((n) => !n.read);
+    } else if (category && category !== 'all') {
+      results = allItems.filter((n) => n.category === category);
     }
+
+    return {
+      success: true,
+      data: results,
+      total: pageData?.totalElements ?? results.length,
+      unreadCount: allItems.filter((n) => !n.read).length,
+    };
   },
 
-  /**
-   * Mark single notification as read
-   */
   markAsRead: async (id) => {
-    try {
-      const response = await apiClient.patch(`/notifications/${id}/read`);
-      return response.data;
-    } catch {
-      notificationsList = notificationsList.map((n) =>
-        n.id === id ? { ...n, read: true } : n
-      );
-      return {
-        success: true,
-        unreadCount: notificationsList.filter((n) => !n.read).length,
-      };
-    }
+    await apiClient.post(`/notifications/${id}/read`);
+    return { success: true };
   },
 
-  /**
-   * Mark all notifications as read
-   */
   markAllAsRead: async () => {
-    try {
-      const response = await apiClient.post('/notifications/read-all');
-      return response.data;
-    } catch {
-      notificationsList = notificationsList.map((n) => ({ ...n, read: true }));
-      return {
-        success: true,
-        unreadCount: 0,
-      };
-    }
+    await apiClient.post('/notifications/read-all');
+    return { success: true, unreadCount: 0 };
   },
 
-  /**
-   * Delete a notification
-   */
   deleteNotification: async (id) => {
-    try {
-      const response = await apiClient.delete(`/notifications/${id}`);
-      return response.data;
-    } catch {
-      notificationsList = notificationsList.filter((n) => n.id !== id);
-      return {
-        success: true,
-        unreadCount: notificationsList.filter((n) => !n.read).length,
-      };
-    }
+    await apiClient.delete(`/notifications/${id}`);
+    return { success: true };
   },
 
-  /**
-   * Get unread count
-   */
   getUnreadCount: async () => {
-    try {
-      const response = await apiClient.get('/notifications/unread-count');
-      return response.data;
-    } catch {
-      return {
-        count: notificationsList.filter((n) => !n.read).length,
-      };
-    }
+    const response = await apiClient.get('/notifications/unread-count');
+    const data = unwrapEnvelope(response);
+    const unreadCount = data?.unreadCount ?? data?.count ?? 0;
+    return { unreadCount, count: unreadCount };
+  },
+
+  getPreferences: async () => {
+    const response = await apiClient.get('/users/me/notification-preferences');
+    return {
+      success: true,
+      data: unwrapEnvelope(response) || {},
+    };
+  },
+
+  updatePreferences: async (prefs) => {
+    const response = await apiClient.put('/users/me/notification-preferences', prefs);
+    return {
+      success: true,
+      data: unwrapEnvelope(response) || {},
+      message: 'Notification preferences saved!',
+    };
   },
 };
 

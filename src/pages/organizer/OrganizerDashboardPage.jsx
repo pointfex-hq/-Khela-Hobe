@@ -43,7 +43,7 @@ export const OrganizerDashboardPage = () => {
       setLoading(true);
       try {
         const [dashRes, analRes] = await Promise.all([
-          organizerService.getOrganizerDashboard(),
+          organizerService.getOrganizerDashboard(user?.id),
           analyticsService.getOrganizerAnalytics(),
         ]);
         if (dashRes?.data) {
@@ -60,7 +60,7 @@ export const OrganizerDashboardPage = () => {
     };
 
     loadDashboard();
-  }, []);
+  }, [user?.id]);
 
   if (loading) {
     return (
@@ -71,30 +71,23 @@ export const OrganizerDashboardPage = () => {
   }
 
   const metrics = dashboardData?.metrics || {
-    totalCreated: 14,
-    upcoming: 3,
-    active: 2,
-    completed: 9,
-    participants: 128,
-    pendingApps: 4,
+    totalCreated: 0,
+    upcoming: 0,
+    active: 0,
+    completed: 0,
+    participants: 0,
+    pendingApps: 0,
   };
 
   const activeMatches = dashboardData?.activeMatches || [];
-  const pendingAlert = dashboardData?.pendingAlert || {
-    count: 4,
-    matchTitle: 'Uttara Sector 11 Floodlit 7v7',
-    schedule: 'Today, 8:30 PM BST',
+  const pendingAlert = dashboardData?.pendingAlert ?? {
+    count: 0,
+    matchTitle: 'your active matches',
+    schedule: 'Upcoming',
+    remainingSlots: 0,
   };
 
-  const attendanceData = analytics?.attendanceTrend || [
-    { day: 'Mon', players: 14 },
-    { day: 'Tue', players: 8 },
-    { day: 'Wed', players: 22 },
-    { day: 'Thu', players: 12 },
-    { day: 'Fri', players: 28 },
-    { day: 'Sat', players: 36 },
-    { day: 'Sun', players: 30 },
-  ];
+  const attendanceData = analytics?.attendanceTrend || [];
 
   return (
     <div className="flex flex-col gap-8 max-w-7xl w-full mx-auto">
@@ -123,6 +116,13 @@ export const OrganizerDashboardPage = () => {
           >
             <FontAwesomeIcon icon={faTrophy} className="text-accent text-sm" />
             <span>Events Console</span>
+          </Link>
+          <Link
+            to={ROUTES.ORGANIZER_EARNINGS}
+            className="shrink-0 inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-md bg-light-surface dark:bg-dark-surface border border-light-border dark:border-dark-border text-light-on-surface dark:text-dark-on-surface font-label text-label-md hover:border-primary transition-colors"
+          >
+            <FontAwesomeIcon icon={faChartSimple} className="text-success text-sm" />
+            <span>Earnings &amp; Payouts</span>
           </Link>
         </div>
       </div>

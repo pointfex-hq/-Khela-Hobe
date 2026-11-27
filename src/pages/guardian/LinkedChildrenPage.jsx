@@ -14,6 +14,7 @@ import {
   faCircleInfo,
 } from '@fortawesome/free-solid-svg-icons';
 import { childService } from '../../services/endpoints/childService';
+import { useAuth } from '../../hooks/useAuth';
 import { toastService } from '../../components/feedback/toastService';
 import Button from '../../components/common/Button';
 import Badge from '../../components/common/Badge';
@@ -22,6 +23,7 @@ import LoadingSpinner from '../../components/feedback/LoadingSpinner';
 
 export const LinkedChildrenPage = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [children, setChildren] = useState([]);
   const [loading, setLoading] = useState(true);
   const [safetyIdInput, setSafetyIdInput] = useState('');
@@ -57,9 +59,14 @@ export const LinkedChildrenPage = () => {
 
   const handleSendLinkRequest = async (e) => {
     e.preventDefault();
-    const cleanId = safetyIdInput.trim();
+    const cleanId = safetyIdInput.trim().toUpperCase();
     if (!cleanId) {
       toastService.error('Please enter a valid Child Safety ID.');
+      return;
+    }
+
+    if (user?.safetyId && cleanId === String(user.safetyId).trim().toUpperCase()) {
+      toastService.error('You cannot enter your own Safety ID to link to your own account.');
       return;
     }
 
@@ -128,7 +135,7 @@ export const LinkedChildrenPage = () => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-light-border dark:border-dark-border pb-5">
         <div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <h1 className="font-headline font-bold text-2xl sm:text-3xl text-light-on-background dark:text-dark-on-background">
               Linked Children
             </h1>
@@ -143,7 +150,7 @@ export const LinkedChildrenPage = () => {
       </div>
 
       {/* Initiate Linking Form (Safety ID initiation-only rule) */}
-      <section className="rounded-lg bg-light-surface dark:bg-dark-surface border border-light-border dark:border-dark-border p-6 flex flex-col gap-4 shadow-sm">
+      <section className="rounded-lg bg-light-surface dark:bg-dark-surface border border-light-border dark:border-dark-border p-4 sm:p-6 flex flex-col gap-4 shadow-sm">
         <div className="flex flex-col gap-1">
           <div className="flex items-center gap-2">
             <FontAwesomeIcon icon={faLock} className="text-primary text-sm" />

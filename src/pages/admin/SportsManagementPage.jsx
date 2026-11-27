@@ -14,6 +14,7 @@ import {
   faTrophy,
 } from '@fortawesome/free-solid-svg-icons';
 import { sportsService } from '../../services/endpoints/sportsService';
+import { uploadService } from '../../services/endpoints/uploadService';
 import { toastService } from '../../components/feedback/toastService';
 import Button from '../../components/common/Button';
 import Badge from '../../components/common/Badge';
@@ -38,6 +39,8 @@ export const SportsManagementPage = () => {
   const [equipmentProvided, setEquipmentProvided] = useState('');
   const [status, setStatus] = useState('Active');
   const [iconKey, setIconKey] = useState('futbol');
+  const [customIcon, setCustomIcon] = useState('⚽');
+  const [uploadingIcon, setUploadingIcon] = useState(false);
 
   // Delete Dialog State
   const [deleteDialogState, setDeleteDialogState] = useState({
@@ -72,6 +75,7 @@ export const SportsManagementPage = () => {
     setEquipmentProvided('');
     setStatus('Active');
     setIconKey('futbol');
+    setCustomIcon('⚽');
     setIsModalOpen(true);
   };
 
@@ -84,7 +88,29 @@ export const SportsManagementPage = () => {
     setEquipmentProvided(sport.equipmentProvided || '');
     setStatus(sport.status || 'Active');
     setIconKey(sport.iconKey || 'futbol');
+    setCustomIcon(sport.iconUrl || '⚽');
     setIsModalOpen(true);
+  };
+
+  const handleIconUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) {
+      toastService.error('Icon image must be 2 MB or smaller.');
+      return;
+    }
+    setUploadingIcon(true);
+    try {
+      const res = await uploadService.uploadImage(file, 'sports-icons');
+      if (res?.url) {
+        setCustomIcon(res.url);
+        toastService.success('Custom sport icon uploaded!');
+      }
+    } catch (err) {
+      toastService.error(err?.message || 'Failed to upload custom icon.');
+    } finally {
+      setUploadingIcon(false);
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -96,6 +122,13 @@ export const SportsManagementPage = () => {
 
     try {
       setSubmitting(true);
+      const fallbackEmojiMap = {
+        futbol: '⚽',
+        baseball: '🏏',
+        basketball: '🏀',
+        'table-tennis-paddle-ball': '🏸',
+      };
+      const resolvedIconUrl = customIcon.trim() || fallbackEmojiMap[iconKey] || '⚽';
       const payload = {
         name: name.trim(),
         formats: formats.trim() || 'Standard format',
@@ -104,6 +137,7 @@ export const SportsManagementPage = () => {
         equipmentProvided: equipmentProvided.trim(),
         status,
         iconKey,
+        iconUrl: resolvedIconUrl,
       };
 
       if (editingSport) {
@@ -204,8 +238,14 @@ export const SportsManagementPage = () => {
               >
                 <div className="flex flex-col gap-3.5">
                   <div className="flex items-center justify-between">
-                    <span className="w-10 h-10 rounded-md bg-light-surface-elevated dark:bg-dark-surface-elevated text-primary flex items-center justify-center text-lg shadow-inner">
-                      <FontAwesomeIcon icon={icon} />
+                    <span className="w-10 h-10 rounded-md bg-light-surface-elevated dark:bg-dark-surface-elevated text-primary flex items-center justify-center text-lg shadow-inner overflow-hidden">
+                      {sport.iconUrl && /^https?:\/\//i.test(sport.iconUrl) ? (
+                        <img src={sport.iconUrl} alt={sport.name} className="w-7 h-7 object-contain" />
+                      ) : sport.iconUrl ? (
+                        <span className="text-xl leading-none">{sport.iconUrl}</span>
+                      ) : (
+                        <FontAwesomeIcon icon={icon} />
+                      )}
                     </span>
                     <Badge variant={isActive ? 'success' : 'secondary'} size="sm" hasDot={isActive}>
                       {sport.status}
@@ -314,12 +354,24 @@ export const SportsManagementPage = () => {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="flex flex-col gap-1">
               <label htmlFor="sportIconKey" className="font-label text-xs font-semibold text-light-on-surface dark:text-dark-on-surface">
-                Icon Category
+                Default Category
               </label>
               <select
                 id="sportIconKey"
                 value={iconKey}
-                onChange={(e) => setIconKey(e.target.value)}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setIconKey(val);
+                  const map = {
+                    futbol: '⚽',
+                    baseball: '🏏',
+                    basketball: '🏀',
+                    'table-tennis-paddle-ball': '🏸',
+                  };
+                  if (map[val] && (!customIcon || Object.values(map).includes(customIcon))) {
+                    setCustomIcon(map[val]);
+                  }
+                }}
                 className="px-3 py-2 rounded-md bg-light-background dark:bg-dark-background border border-light-border dark:border-dark-border font-body text-xs sm:text-sm text-light-on-surface dark:text-dark-on-surface focus:outline-none focus:ring-2 focus:ring-primary"
               >
                 <option value="futbol">Football / Futsal</option>
@@ -342,6 +394,39 @@ export const SportsManagementPage = () => {
                 <option value="Active">Active</option>
                 <option value="Inactive">Inactive</option>
               </select>
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <label htmlFor="sportCustomIcon" className="font-label text-xs font-semibold text-light-on-surface dark:text-dark-on-surface">
+              Custom Icon (Emoji, Symbol, Image URL, or Upload)
+            </label>
+            <div className="flex items-center gap-2">
+              <span className="w-10 h-10 rounded-md bg-light-background dark:bg-dark-background border border-light-border dark:border-dark-border flex items-center justify-center shrink-0 overflow-hidden">
+                {customIcon && /^https?:\/\//i.test(customIcon) ? (
+                  <img src={customIcon} alt="Custom icon" className="w-7 h-7 object-contain" />
+                ) : (
+                  <span className="text-xl leading-none">{customIcon || '⚽'}</span>
+                )}
+              </span>
+              <input
+                id="sportCustomIcon"
+                type="text"
+                value={customIcon}
+                onChange={(e) => setCustomIcon(e.target.value)}
+                placeholder="Paste emoji (e.g. 🏐, 🎾) or https://... icon URL"
+                className="flex-1 px-3 py-2 rounded-md bg-light-background dark:bg-dark-background border border-light-border dark:border-dark-border font-body text-xs sm:text-sm text-light-on-surface dark:text-dark-on-surface focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="file"
+                accept="image/png, image/jpeg, image/webp, image/gif"
+                onChange={handleIconUpload}
+                disabled={uploadingIcon}
+                className="text-xs font-body text-light-muted dark:text-dark-muted file:mr-3 file:py-1 file:px-2.5 file:rounded file:border file:border-light-border dark:file:border-dark-border file:bg-light-surface-elevated dark:file:bg-dark-surface-elevated file:font-label file:text-xs"
+              />
+              {uploadingIcon && <span className="text-xs text-primary font-label">Uploading...</span>}
             </div>
           </div>
 

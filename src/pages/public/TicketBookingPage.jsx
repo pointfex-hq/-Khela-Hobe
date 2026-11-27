@@ -19,6 +19,7 @@ import {
   faBuildingColumns,
 } from '@fortawesome/free-solid-svg-icons';
 import { ticketService } from '../../services/endpoints/ticketService';
+import { paymentService } from '../../services/endpoints/paymentService';
 import { useAuth } from '../../hooks/useAuth';
 import { ROUTES } from '../../constants/routes';
 import { toastService } from '../../components/feedback/toastService';
@@ -26,6 +27,8 @@ import Button from '../../components/common/Button';
 import Badge from '../../components/common/Badge';
 import LoadingSpinner from '../../components/feedback/LoadingSpinner';
 import Modal from '../../components/modals/Modal';
+import QrCodeCanvas from '../../components/common/QrCodeCanvas';
+import { downloadTicketPassPdf } from '../../utils/ticketPdfGenerator';
 
 export const TicketBookingPage = () => {
   const { eventId = 'evt_01' } = useParams();
@@ -42,9 +45,13 @@ export const TicketBookingPage = () => {
   });
 
   // Attendee information
-  const [attendeeName, setAttendeeName] = useState(user?.name || 'Tanvir Hasan');
-  const [attendeePhone, setAttendeePhone] = useState(user?.phone || '+880 1711-234567');
-  const [attendeeEmail, setAttendeeEmail] = useState(user?.email || 'tanvir@khelahobe.com');
+  const [attendeeName, setAttendeeName] = useState(user?.name || '');
+  const [attendeePhone, setAttendeePhone] = useState(user?.phone || '');
+  const [attendeeEmail, setAttendeeEmail] = useState(user?.email || '');
+  const [paymentMethod, setPaymentMethod] = useState('sslcommerz');
+  const [couponInput, setCouponInput] = useState('');
+  const [appliedCoupon, setAppliedCoupon] = useState(null);
+  const [validatingCoupon, setValidatingCoupon] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   // Booking confirmation modal
@@ -110,6 +117,29 @@ export const TicketBookingPage = () => {
     eventData?.tiers?.find((t) => t.id === selectedTierId) || eventData?.tiers?.[0];
   const selectedQty = quantities[selectedTier?.id] || 1;
   const subtotal = (selectedTier?.price || 0) * selectedQty;
+  const discountAmount = appliedCoupon?.discountAmount || 0;
+  const finalTotal = Math.max(0, subtotal - discountAmount);
+
+  const handleApplyCoupon = async () => {
+    if (!couponInput.trim() || !selectedTier) return;
+    setValidatingCoupon(true);
+    try {
+      const res = await ticketService.validateCoupon(eventId, {
+        code: couponInput.trim(),
+        unitPrice: selectedTier.price || 0,
+        quantity: selectedQty,
+      });
+      if (res?.data) {
+        setAppliedCoupon(res.data);
+        toastService.success(`Coupon ${res.data.code} applied! Saved BDT ${res.data.discountAmount}.`);
+      }
+    } catch (err) {
+      setAppliedCoupon(null);
+      toastService.error(err?.message || 'Invalid or ineligible coupon code.');
+    } finally {
+      setValidatingCoupon(false);
+    }
+  };
 
   const handleReserveTicket = async (e) => {
     e.preventDefault();
@@ -120,22 +150,56 @@ export const TicketBookingPage = () => {
 
     try {
       setSubmitting(true);
+
+      if (paymentMethod === 'sslcommerz' && finalTotal > 0) {
+        const payRes = await paymentService.initiateSslcommerzPayment({
+          amount: finalTotal,
+          currency: 'BDT',
+          purpose: 'EVENT_TICKET',
+          eventId,
+          productName: `${eventData?.eventTitle || 'Tournament Pass'} - ${selectedTier?.name || 'Ticket'}`,
+          customerName: attendeeName.trim(),
+          customerEmail: attendeeEmail.trim() || undefined,
+          customerPhone: attendeePhone.trim(),
+          metadata: {
+            eventId,
+            tierId: selectedTier?.id,
+            quantity: selectedQty,
+            couponCode: appliedCoupon?.code || undefined,
+            attendeeName: attendeeName.trim(),
+            attendeePhone: attendeePhone.trim(),
+            attendeeEmail: attendeeEmail.trim() || undefined,
+          },
+        });
+        if (payRes?.data?.gatewayUrl) {
+          window.location.href = payRes.data.gatewayUrl;
+          return;
+        }
+        toastService.error('SSLCommerz did not return a checkout URL.');
+        return;
+      }
+
       const payload = {
-        tierId: selectedTier.id,
+        tierId: selectedTier?.id || 'general',
         quantity: selectedQty,
+        couponCode: appliedCoupon?.code || undefined,
         attendeeName,
         attendeePhone,
-        attendeeEmail,
+        attendeeEmail: attendeeEmail.trim() || undefined,
       };
 
       const res = await ticketService.bookTicket(eventId, payload);
       if (res.success) {
         setConfirmedTicket(res.data);
         setIsConfirmModalOpen(true);
-        toastService.success('Pass reservation confirmed! Pay at venue check-in.');
+        toastService.success(
+          finalTotal === 0
+            ? `${selectedQty} ticket(s) confirmed & issued!`
+            : 'Pass reservation confirmed! Pay at venue check-in.'
+        );
       }
-    } catch {
-      toastService.error('Failed to create reservation. Please try again.');
+    } catch (err) {
+      toastService.error(err?.message || 'Failed to initiate payment or reservation.');
     } finally {
       setSubmitting(false);
     }
@@ -172,29 +236,64 @@ export const TicketBookingPage = () => {
         </div>
 
         <div className="flex items-center gap-2 self-start sm:self-auto">
-          <Badge variant="warning" size="sm" hasDot>
-            Pay at Venue Mode
+          <Badge variant={paymentMethod === 'sslcommerz' ? 'primary' : 'warning'} size="sm" hasDot>
+            {paymentMethod === 'sslcommerz' ? 'SSLCommerz Checkout' : 'Pay at Venue'}
           </Badge>
         </div>
       </div>
 
-      {/* Main Grid Layout (Reference lines 121-160 in UIUX/ticket_booking/code.html) */}
+      {/* Main Grid Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-        {/* Left Column (7 cols): Payment Notice & Ticket Tiers */}
+        {/* Left Column (7 cols): Payment Method & Ticket Tiers */}
         <section className="lg:col-span-7 flex flex-col gap-5">
-          {/* Online Payment Notice (Strict Reference Compliance) */}
-          <div className="rounded-lg bg-light-surface dark:bg-dark-surface border border-warning/80 p-4 sm:p-5 flex items-start gap-3.5 shadow-sm">
-            <span className="w-8 h-8 rounded-full bg-warning/15 text-warning flex items-center justify-center shrink-0 mt-0.5">
-              <FontAwesomeIcon icon={faTriangleExclamation} className="text-sm" />
-            </span>
-            <div className="flex flex-col gap-1">
-              <h2 className="font-headline font-bold text-sm text-warning">
-                Checkout Notice (Preview Mode)
-              </h2>
-              <p className="font-body text-xs sm:text-sm text-light-on-surface dark:text-dark-on-surface">
-                Online payment checkout is currently unavailable until payment gateway APIs are connected.
-                You can select ticket tiers below to hold your reservation pass with pay-at-venue settlement.
-              </p>
+          {/* Online Payment Selector */}
+          <div className="rounded-lg bg-light-surface dark:bg-dark-surface border border-primary/40 p-4 sm:p-5 flex flex-col gap-3 shadow-sm">
+            <div className="flex items-center gap-2.5">
+              <span className="w-8 h-8 rounded-full bg-primary/15 text-primary flex items-center justify-center shrink-0">
+                <FontAwesomeIcon icon={faCreditCard} className="text-sm" />
+              </span>
+              <div>
+                <h2 className="font-headline font-bold text-sm text-light-on-surface dark:text-dark-on-surface">
+                  Select Payment Method
+                </h2>
+                <p className="font-body text-xs text-light-muted dark:text-dark-muted">
+                  Pay online via SSLCommerz (bKash, Nagad, Rocket, Visa/Mastercard) or reserve to pay at the venue.
+                </p>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => setPaymentMethod('sslcommerz')}
+                className={`p-3 rounded-md border text-left transition-colors ${
+                  paymentMethod === 'sslcommerz'
+                    ? 'border-primary bg-primary/10'
+                    : 'border-light-border dark:border-dark-border hover:border-primary/50'
+                }`}
+              >
+                <span className="font-label text-xs font-bold block text-light-on-surface dark:text-dark-on-surface">
+                  SSLCommerz Online
+                </span>
+                <span className="font-body text-[11px] text-light-muted dark:text-dark-muted">
+                  bKash, Nagad, Cards (Sandbox/Live)
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setPaymentMethod('venue')}
+                className={`p-3 rounded-md border text-left transition-colors ${
+                  paymentMethod === 'venue'
+                    ? 'border-primary bg-primary/10'
+                    : 'border-light-border dark:border-dark-border hover:border-primary/50'
+                }`}
+              >
+                <span className="font-label text-xs font-bold block text-light-on-surface dark:text-dark-on-surface">
+                  Pay at Venue Gate
+                </span>
+                <span className="font-body text-[11px] text-light-muted dark:text-dark-muted">
+                  Reserve pass and pay on arrival
+                </span>
+              </button>
             </div>
           </div>
 
@@ -254,7 +353,7 @@ export const TicketBookingPage = () => {
                       {tier.description}
                     </p>
                     <span className="font-mono text-[11px] text-light-muted dark:text-dark-muted">
-                      {tier.availableQuantity} passes remaining
+                      {tier.available ?? tier.availableQuantity ?? 0} passes remaining
                     </span>
                   </div>
 
@@ -276,10 +375,10 @@ export const TicketBookingPage = () => {
                         <button
                           type="button"
                           onClick={() =>
-                            handleQuantityChange(tier.id, -1, tier.maxPerOrder, tier.availableQuantity)
+                            handleQuantityChange(tier.id, -1, tier.maxPerOrder || 10, tier.available ?? tier.availableQuantity ?? 10)
                           }
                           disabled={qty <= 1}
-                          className="w-7 h-7 rounded flex items-center justify-center text-xs text-light-muted dark:text-dark-muted hover:text-light-on-surface dark:hover:text-dark-on-surface disabled:opacity-30 disabled:cursor-not-allowed"
+                          className="w-9 h-9 sm:w-7 sm:h-7 rounded flex items-center justify-center text-xs text-light-muted dark:text-dark-muted hover:text-light-on-surface dark:hover:text-dark-on-surface disabled:opacity-30 disabled:cursor-not-allowed"
                           aria-label="Decrease quantity"
                         >
                           <FontAwesomeIcon icon={faMinus} />
@@ -290,10 +389,10 @@ export const TicketBookingPage = () => {
                         <button
                           type="button"
                           onClick={() =>
-                            handleQuantityChange(tier.id, 1, tier.maxPerOrder, tier.availableQuantity)
+                            handleQuantityChange(tier.id, 1, tier.maxPerOrder || 10, tier.available ?? tier.availableQuantity ?? 10)
                           }
-                          disabled={qty >= tier.maxPerOrder || qty >= tier.availableQuantity}
-                          className="w-7 h-7 rounded flex items-center justify-center text-xs text-light-muted dark:text-dark-muted hover:text-light-on-surface dark:hover:text-dark-on-surface disabled:opacity-30 disabled:cursor-not-allowed"
+                          disabled={qty >= (tier.maxPerOrder || 10) || qty >= (tier.available ?? tier.availableQuantity ?? 10)}
+                          className="w-9 h-9 sm:w-7 sm:h-7 rounded flex items-center justify-center text-xs text-light-muted dark:text-dark-muted hover:text-light-on-surface dark:hover:text-dark-on-surface disabled:opacity-30 disabled:cursor-not-allowed"
                           aria-label="Increase quantity"
                         >
                           <FontAwesomeIcon icon={faPlus} />
@@ -308,13 +407,42 @@ export const TicketBookingPage = () => {
         </section>
 
         {/* Right Column (5 cols): Order Summary & Reservation Form */}
-        <aside className="lg:col-span-5 rounded-lg bg-light-surface dark:bg-dark-surface border border-light-border dark:border-dark-border p-6 flex flex-col gap-5 shadow-sm sticky top-20">
+        <aside className="lg:col-span-5 rounded-lg bg-light-surface dark:bg-dark-surface border border-light-border dark:border-dark-border p-4 sm:p-6 flex flex-col gap-5 shadow-sm lg:sticky lg:top-20">
           <div className="flex items-center justify-between">
             <h2 className="font-headline font-bold text-xl text-light-on-surface dark:text-dark-on-surface">
               Order Summary
             </h2>
             <FontAwesomeIcon icon={faTicket} className="text-primary text-base" />
           </div>
+
+          {/* Coupon Input */}
+          {subtotal > 0 && (
+            <div className="flex flex-col gap-1.5">
+              <span className="font-label text-xs font-semibold">Promo / Account Discount Coupon</span>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={couponInput}
+                  onChange={(e) => setCouponInput(e.target.value)}
+                  placeholder="Enter coupon code..."
+                  className="flex-1 px-3 py-2 rounded-md bg-light-background dark:bg-dark-background border border-light-border dark:border-dark-border font-mono text-xs uppercase"
+                />
+                <button
+                  type="button"
+                  disabled={validatingCoupon}
+                  onClick={handleApplyCoupon}
+                  className="px-3.5 py-2 rounded-md border border-primary text-primary font-label text-xs font-semibold hover:bg-primary/10 disabled:opacity-50"
+                >
+                  {validatingCoupon ? '...' : 'Apply'}
+                </button>
+              </div>
+              {appliedCoupon && (
+                <span className="text-xs text-success font-semibold">
+                  Applied {appliedCoupon.code}: -BDT {appliedCoupon.discountAmount}
+                </span>
+              )}
+            </div>
+          )}
 
           {/* Breakdown Row */}
           <div className="flex flex-col gap-2.5 py-3 border-y border-light-border dark:border-dark-border font-body text-sm">
@@ -326,23 +454,31 @@ export const TicketBookingPage = () => {
                 BDT {subtotal}
               </span>
             </div>
+            {discountAmount > 0 && (
+              <div className="flex items-center justify-between text-xs text-success font-semibold">
+                <span>Coupon Discount ({appliedCoupon?.code})</span>
+                <span>-BDT {discountAmount}</span>
+              </div>
+            )}
             <div className="flex items-center justify-between text-xs text-light-muted dark:text-dark-muted">
               <span>Platform Reservation Fee</span>
               <span className="text-success font-semibold">FREE</span>
             </div>
             <div className="flex items-center justify-between text-xs text-light-muted dark:text-dark-muted">
               <span>Settlement Method</span>
-              <span className="text-warning font-semibold">Pay at Venue Gate</span>
+              <span className={`font-semibold ${paymentMethod === 'sslcommerz' ? 'text-primary' : 'text-warning'}`}>
+                {finalTotal === 0 ? 'Complimentary / Free' : paymentMethod === 'sslcommerz' ? 'SSLCommerz Gateway' : 'Pay at Venue Gate'}
+              </span>
             </div>
           </div>
 
           {/* Total Calculation */}
           <div className="flex items-center justify-between">
             <span className="font-headline font-bold text-base text-light-on-surface dark:text-dark-on-surface">
-              Total Due at Venue:
+              {finalTotal === 0 ? 'Total Due:' : paymentMethod === 'sslcommerz' ? 'Total Payable:' : 'Total Due at Venue:'}
             </span>
             <span className="font-headline font-extrabold text-2xl text-primary tabular-nums">
-              BDT {subtotal}
+              BDT {finalTotal}
             </span>
           </div>
 
@@ -421,11 +557,17 @@ export const TicketBookingPage = () => {
               loading={submitting}
               className="w-full mt-2"
             >
-              Reserve Pass (Pay at Venue)
+              {paymentMethod === 'sslcommerz' && finalTotal > 0
+                ? `Pay BDT ${finalTotal} via SSLCommerz`
+                : finalTotal === 0
+                  ? `Confirm ${selectedQty} Free Pass${selectedQty > 1 ? 'es' : ''}`
+                  : `Reserve ${selectedQty} Pass${selectedQty > 1 ? 'es' : ''} (Pay at Venue)`}
             </Button>
 
             <p className="font-body text-xs text-light-muted dark:text-dark-muted text-center leading-relaxed">
-              No online charges are processed in this preview state. Your spot is held in the verified organizer registry.
+              {paymentMethod === 'sslcommerz'
+                ? 'You will be redirected securely to SSLCommerz to complete your payment.'
+                : 'Your spot is held in the verified organizer registry for gate settlement.'}
             </p>
           </form>
         </aside>
@@ -449,46 +591,56 @@ export const TicketBookingPage = () => {
                 {confirmedTicket.eventTier}
               </h2>
               <p className="font-body text-xs text-light-muted dark:text-dark-muted mt-1">
-                {confirmedTicket.title}
+                {confirmedTicket.eventTitle || confirmedTicket.title}
               </p>
             </div>
 
-            {/* Simulated QR Code */}
+            {/* Pass Codes & Real QR */}
             <div className="p-4 rounded-lg bg-light-background dark:bg-dark-background border border-light-border dark:border-dark-border flex flex-col items-center gap-2 w-full">
-              <div className="w-28 h-28 bg-white p-2 rounded flex items-center justify-center shadow-sm">
-                <svg viewBox="0 0 100 100" className="w-full h-full text-black" fill="currentColor">
-                  <rect x="0" y="0" width="30" height="30" fill="black" />
-                  <rect x="5" y="5" width="20" height="20" fill="white" />
-                  <rect x="10" y="10" width="10" height="10" fill="black" />
-                  <rect x="70" y="0" width="30" height="30" fill="black" />
-                  <rect x="75" y="5" width="20" height="20" fill="white" />
-                  <rect x="80" y="10" width="10" height="10" fill="black" />
-                  <rect x="0" y="70" width="30" height="30" fill="black" />
-                  <rect x="5" y="75" width="20" height="20" fill="white" />
-                  <rect x="10" y="80" width="10" height="10" fill="black" />
-                  <rect x="40" y="10" width="10" height="10" fill="black" />
-                  <rect x="40" y="30" width="20" height="10" fill="black" />
-                  <rect x="70" y="40" width="15" height="15" fill="black" />
-                  <rect x="35" y="50" width="10" height="20" fill="black" />
-                  <rect x="75" y="70" width="20" height="20" fill="black" />
-                </svg>
+              <div className="w-32 h-32 bg-white p-2 rounded flex items-center justify-center shadow-sm">
+                <QrCodeCanvas
+                  value={JSON.stringify({
+                    code: (confirmedTicket.ticketCodes && confirmedTicket.ticketCodes[0]) || confirmedTicket.id,
+                    tournamentId: eventId,
+                  })}
+                  size={112}
+                  alt="Booked ticket QR code"
+                />
               </div>
-              <p className="font-mono text-xs font-bold text-primary tracking-wider">
-                {confirmedTicket.id}
-              </p>
+              <div className="flex flex-wrap justify-center gap-1.5">
+                {(confirmedTicket.ticketCodes || [confirmedTicket.id]).map((code) => (
+                  <span key={code} className="px-2 py-0.5 rounded bg-primary/15 font-mono text-xs font-bold text-primary tracking-wider">
+                    {code}
+                  </span>
+                ))}
+              </div>
               <span className="font-body text-[11px] text-light-muted dark:text-dark-muted">
-                Present this code at gate check-in • Pay {confirmedTicket.fee}
+                {confirmedTicket.quantity || 1} pass(es) • {confirmedTicket.paymentStatus || 'Confirmed'}
               </span>
             </div>
 
-            <div className="flex items-center gap-3 w-full pt-2">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full pt-2">
               <Button
                 variant="outline"
                 size="md"
                 className="flex-1"
-                onClick={() => setIsConfirmModalOpen(false)}
+                onClick={() =>
+                  downloadTicketPassPdf({
+                    id: (confirmedTicket.ticketCodes && confirmedTicket.ticketCodes[0]) || confirmedTicket.id,
+                    ticketCode: (confirmedTicket.ticketCodes && confirmedTicket.ticketCodes[0]) || confirmedTicket.id,
+                    tournamentId: eventId,
+                    title: confirmedTicket.eventTitle || eventData?.eventTitle,
+                    venue: eventData?.venue,
+                    schedule: `${eventData?.date || ''} • ${eventData?.time || ''}`,
+                    eventTier: confirmedTicket.eventTier,
+                    attendeeName,
+                    fee: finalTotal > 0 ? `BDT ${finalTotal}` : 'Free Pass',
+                    paymentStatus: confirmedTicket.paymentStatus || 'Confirmed',
+                    status: 'RESERVED',
+                  })
+                }
               >
-                Close
+                Save Offline PDF
               </Button>
               <Button
                 variant="primary"

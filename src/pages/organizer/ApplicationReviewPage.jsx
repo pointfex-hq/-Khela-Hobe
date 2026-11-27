@@ -24,21 +24,27 @@ export const ApplicationReviewPage = () => {
   const [loading, setLoading] = useState(true);
   const [actionLoadingId, setActionLoadingId] = useState(null);
 
-  // Fetch match details and pending applicants
+  // Fetch match details (if scoped) and pending applicants across organizer's matches
   const loadData = async () => {
     setLoading(true);
     try {
-      const targetMatchId = matchId || 'match_1';
-      const [matchRes, appsRes] = await Promise.all([
-        matchService.getMatchById(targetMatchId),
-        applicationService.getOrganizerApplications(targetMatchId),
-      ]);
-
-      if (matchRes?.data) {
-        setMatch(matchRes.data);
-      }
-      if (appsRes?.data) {
-        setApplications(appsRes.data.filter((a) => a.status === 'pending'));
+      if (matchId) {
+        const [matchRes, appsRes] = await Promise.all([
+          matchService.getMatchById(matchId),
+          applicationService.getOrganizerApplications(matchId),
+        ]);
+        if (matchRes?.data) {
+          setMatch(matchRes.data);
+        }
+        if (appsRes?.data) {
+          setApplications(appsRes.data.filter((a) => a.status === 'pending'));
+        }
+      } else {
+        setMatch(null);
+        const appsRes = await applicationService.getOrganizerApplications();
+        if (appsRes?.data) {
+          setApplications(appsRes.data.filter((a) => a.status === 'pending'));
+        }
       }
     } catch {
       toastService.error('Failed to load application review queue.');
@@ -51,10 +57,10 @@ export const ApplicationReviewPage = () => {
     loadData();
   }, [matchId]);
 
-  const totalSlots = match?.totalSlots || 14;
-  const filledSlots = match?.filledSlots || 11;
-  const remainingSlots = Math.max(0, totalSlots - filledSlots);
-  const isCapacityFull = remainingSlots <= 0;
+  const totalSlots = match?.totalSlots || 0;
+  const filledSlots = match?.filledSlots || 0;
+  const remainingSlots = match ? Math.max(0, totalSlots - filledSlots) : null;
+  const isCapacityFull = Boolean(match && remainingSlots <= 0);
 
   // Handle Accept
   const handleAccept = async (app) => {
@@ -65,21 +71,22 @@ export const ApplicationReviewPage = () => {
 
     setActionLoadingId(app.id);
     try {
-      const res = await applicationService.approveApplication(app.id);
+      const targetMatchId = app.matchId || match?.id || matchId;
+      const res = await applicationService.approveApplication(app.id, targetMatchId);
       if (res?.success) {
-        // Increment slot on match
-        setMatch((prev) => ({
-          ...prev,
-          filledSlots: prev.filledSlots + 1,
-        }));
-        // Remove from pending list
+        if (match) {
+          setMatch((prev) => ({
+            ...prev,
+            filledSlots: (prev?.filledSlots || 0) + 1,
+          }));
+        }
         setApplications((prev) => prev.filter((a) => a.id !== app.id));
-        toastService.success(`Approved ${app.applicantName} for ${match?.title || 'match'}!`);
+        toastService.success(`Approved ${app.applicantName} for ${app.matchTitle || match?.title || 'match'}!`);
       } else {
         toastService.error(res?.message || 'Could not approve applicant.');
       }
-    } catch {
-      toastService.error('An error occurred while approving the application.');
+    } catch (err) {
+      toastService.error(err?.message || 'An error occurred while approving the application.');
     } finally {
       setActionLoadingId(null);
     }
@@ -89,15 +96,20 @@ export const ApplicationReviewPage = () => {
   const handleReject = async (app) => {
     setActionLoadingId(app.id);
     try {
-      const res = await applicationService.rejectApplication(app.id, 'Organizer declined application');
+      const targetMatchId = app.matchId || match?.id || matchId;
+      const res = await applicationService.rejectApplication(
+        app.id,
+        'Organizer declined application',
+        targetMatchId
+      );
       if (res?.success) {
         setApplications((prev) => prev.filter((a) => a.id !== app.id));
         toastService.success(`Application from ${app.applicantName} declined.`);
       } else {
         toastService.error(res?.message || 'Could not decline application.');
       }
-    } catch {
-      toastService.error('An error occurred while rejecting the application.');
+    } catch (err) {
+      toastService.error(err?.message || 'An error occurred while rejecting the application.');
     } finally {
       setActionLoadingId(null);
     }
@@ -105,8 +117,8 @@ export const ApplicationReviewPage = () => {
 
   return (
     <div className="flex flex-col gap-6">
-      {/* Contextual Header (Parity with UIUX/application_review/code.html lines 275-290) */}
-      <header className="sticky top-0 z-20 min-h-16 py-2 border-b border-light-border dark:border-dark-border bg-light-background/95 dark:bg-dark-background/95 backdrop-blur-md px-2 sm:px-4 flex flex-wrap items-center justify-between gap-4">
+      {/* Contextual Header */}
+      <header className="min-h-16 py-2 border-b border-light-border dark:border-dark-border px-2 sm:px-4 flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <button
             type="button"
@@ -125,29 +137,37 @@ export const ApplicationReviewPage = () => {
           <div>
             <h1 className="font-headline text-title-lg font-bold">Application Review</h1>
             <p className="font-body text-body-sm text-light-muted dark:text-dark-muted">
-              {match?.title || 'Uttara Sector 11 Floodlit 7v7'}
+              {match?.title || 'All Organized Matches Queue'}
             </p>
           </div>
         </div>
 
         <div className="flex items-center gap-3 shrink-0">
-          <span className="px-3 py-1.5 rounded-full bg-light-surface dark:bg-dark-surface border border-primary font-label text-label-md text-primary tabular-nums font-semibold">
-            {filledSlots} / {totalSlots} Filled • {remainingSlots} Slot{remainingSlots === 1 ? '' : 's'} Left
-          </span>
+          {match ? (
+            <span className="px-3 py-1.5 rounded-full bg-light-surface dark:bg-dark-surface border border-primary font-label text-label-md text-primary tabular-nums font-semibold">
+              {filledSlots} / {totalSlots} Filled • {remainingSlots} Slot{remainingSlots === 1 ? '' : 's'} Left
+            </span>
+          ) : (
+            <span className="px-3 py-1.5 rounded-full bg-light-surface dark:bg-dark-surface border border-primary font-label text-label-md text-primary tabular-nums font-semibold">
+              {applications.length} Pending Request{applications.length === 1 ? '' : 's'}
+            </span>
+          )}
         </div>
       </header>
 
       {/* Main Container */}
       <div className="max-w-4xl w-full mx-auto flex flex-col gap-6">
-        {/* Capacity Protection Banner (Lines 293-298) */}
+        {/* Capacity Protection Banner */}
         <div className="rounded-lg bg-light-surface dark:bg-dark-surface border border-light-border dark:border-dark-border p-4 flex items-center gap-3.5">
           <FontAwesomeIcon icon={faShieldHalved} className="text-primary text-lg shrink-0" />
           <p className="font-body text-body-md text-light-muted dark:text-dark-muted">
-            Capacity protection is active: accepting more than {remainingSlots} applicant{remainingSlots === 1 ? '' : 's'} is blocked automatically once the {totalSlots}-player limit is reached.
+            {match
+              ? `Capacity protection is active: accepting more than ${remainingSlots} applicant${remainingSlots === 1 ? '' : 's'} is blocked automatically once the ${totalSlots}-player limit is reached.`
+              : 'Showing all pending player requests across your created matches.'}
           </p>
         </div>
 
-        {/* Pending Applicant Cards (Lines 301-347) */}
+        {/* Pending Applicant Cards */}
         {loading ? (
           <div className="py-16 flex justify-center">
             <LoadingSpinner size="lg" message="Loading applicants..." />
@@ -156,8 +176,8 @@ export const ApplicationReviewPage = () => {
           <EmptyState
             icon={faInbox}
             title="All applications reviewed"
-            description="There are no pending player applications for this match right now."
-            actionLabel="Back to Match Hub"
+            description="There are no pending player applications right now."
+            actionLabel="Back to Created Matches"
             onAction={() => {
               if (matchId) {
                 navigate(ROUTES.ORGANIZER_MATCH_MANAGEMENT.replace(':matchId', matchId));
@@ -177,22 +197,36 @@ export const ApplicationReviewPage = () => {
                 >
                   {/* Left: Applicant details */}
                   <div className="flex items-start gap-4">
-                    <img
-                      src={app.avatar}
-                      alt={app.applicantName}
-                      className="w-12 h-12 rounded-full object-cover shrink-0 ring-2 ring-primary/20"
-                    />
+                    {app.avatar ? (
+                      <img
+                        src={app.avatar}
+                        alt={app.applicantName}
+                        className="w-12 h-12 rounded-full object-cover shrink-0 ring-2 ring-primary/20"
+                      />
+                    ) : (
+                      <div className="w-12 h-12 rounded-full bg-primary/15 text-primary flex items-center justify-center font-headline font-bold shrink-0">
+                        {(app.applicantName || 'P').charAt(0).toUpperCase()}
+                      </div>
+                    )}
                     <div className="flex flex-col gap-1 min-w-0">
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
                         <h2 className="font-headline text-title-md font-bold truncate">
                           {app.applicantName}
                         </h2>
-                        <span className="px-2 py-0.5 rounded-full bg-light-surface-elevated dark:bg-dark-surface-elevated text-primary font-label text-label-sm font-semibold">
-                          {app.skill}
-                        </span>
+                        {app.matchTitle && !match && (
+                          <span className="px-2 py-0.5 rounded bg-secondary/15 text-secondary font-label text-xs font-semibold">
+                            {app.matchTitle}
+                          </span>
+                        )}
+                        {app.skill && (
+                          <span className="px-2 py-0.5 rounded-full bg-light-surface-elevated dark:bg-dark-surface-elevated text-primary font-label text-label-sm font-semibold">
+                            {app.skill}
+                          </span>
+                        )}
                       </div>
                       <p className="font-body text-body-sm text-light-muted dark:text-dark-muted">
-                        {app.role || 'Player'} • {app.matchesPlayed} matches played • {app.location}
+                        {app.role || 'Player'}
+                        {app.location ? ` • ${app.location}` : ''}
                       </p>
                       {app.note && (
                         <p className="font-body text-xs text-light-on-surface dark:text-dark-on-surface italic mt-0.5">

@@ -1,0 +1,71 @@
+{
+  "name": "khela-hobe-backend",
+  "version": "1.0.0",
+  "description": "Khela Hobe - Next.js REST API Backend",
+  "type": "module",
+  "scripts": {
+    "dev": "next dev -p 8080",
+    "build": "prisma generate && next build",
+    "start": "next start",
+    "postinstall": "prisma generate",
+    "lint": "next lint",
+    "db:push": "prisma db push",
+    "db:generate": "prisma generate",
+    "db:studio": "prisma studio",
+    "db:migrate": "prisma migrate dev",
+    "seed:demo": "node --env-file=.env prisma/seed-test-data.mjs",
+    "seed:clear": "node --env-file=.env prisma/seed-test-data.mjs --clear"
+  },
+  "keywords": [
+    "sports",
+    "bangladesh",
+    "khela-hobe",
+    "backend",
+    "api"
+  ],
+  "author": "Team Nitrogen",
+  "license": "MIT",
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.1177.0",
+    "@aws-sdk/s3-request-presigner": "^3.1177.0",
+    "@prisma/client": "^6.5.0",
+    "bcryptjs": "^2.4.3",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "date-fns": "^4.1.0",
+    "geoip-lite": "^1.4.10",
+    "ioredis": "^6.1.0",
+    "lucide-react": "^1.79.0",
+    "next": "^16.0.3",
+    "nodemailer": "^10.6.1",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "resend": "^6.40.1",
+    "sharp": "^0.33.5",
+    "tailwind-merge": "^2.5.5",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@prisma/prisma7": "^7.10.1",
+    "@types/bcryptjs": "^2.4.6",
+    "@types/geoip-lite": "^1.4.4",
+    "@types/node": "^22.10.2",
+    "@types/nodemailer": "^8.0.2",
+    "eslint": "^9.16.0",
+    "eslint-config-next": "^16.0.3",
+    "postgrator": "^8.0.0",
+    "prisma": "^6.19.3",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5.7.2"
+  },
+  "prisma": {
+    "seed": "ts-node --compiler-options {\"module\":\"CommonJS\"} prisma/seed.ts"
+  },
+  "allowScripts": {
+    "@prisma/client@6.19.3": true,
+    "@prisma/engines": true,
+    "prisma@7.10.1": true,
+    "prisma@6.19.3": true,
+    "sharp": true
+  }
+}
