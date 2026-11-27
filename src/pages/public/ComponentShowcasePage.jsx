@@ -52,8 +52,42 @@ import SectionContainer from '../../components/layout/SectionContainer';
 import ResponsiveGrid from '../../components/layout/ResponsiveGrid';
 import ThemeToggle from '../../components/common/ThemeToggle';
 import { useTheme } from '../../hooks/useTheme';
-import { MOCK_MATCHES, MOCK_USERS } from '../../mocks/mockData';
 import { ROLES } from '../../constants/roles';
+
+const SHOWCASE_MATCHES = [
+  {
+    id: 'showcase-match-1',
+    title: 'Floodlit 7v7 Turf Match',
+    sport: 'Football',
+    venue: 'Turf Arena',
+    area: 'Dhaka',
+    timeDisplay: '8:00 PM',
+    filledSlots: 10,
+    totalSlots: 14,
+    joinMode: 'Open Join',
+    fee: 200,
+    organizer: { name: 'Organizer' },
+  },
+];
+
+const SHOWCASE_PLAYER = {
+  id: 'showcase-player',
+  name: 'Athlete Sample',
+  role: ROLES.PLAYER,
+  area: 'Dhaka',
+  skillLevel: 'Intermediate',
+  matchesPlayed: 12,
+  reputation: 98,
+};
+
+const SHOWCASE_ORGANIZER = {
+  id: 'showcase-org',
+  name: 'Organizer Sample',
+  role: ROLES.ORGANIZER,
+  area: 'Dhaka',
+  matchesOrganized: 20,
+  rating: 4.9,
+};
 
 export const ComponentShowcasePage = () => {
   const { isDark, toggleTheme } = useTheme();
@@ -319,7 +353,7 @@ export const ComponentShowcasePage = () => {
               <span className="font-label text-xs text-light-muted dark:text-dark-muted uppercase tracking-wider font-semibold block mb-2">
                 Match Card
               </span>
-              <MatchCard match={MOCK_MATCHES[0]} />
+              <MatchCard match={SHOWCASE_MATCHES[0]} />
             </div>
 
             {/* Player Card */}
@@ -327,7 +361,7 @@ export const ComponentShowcasePage = () => {
               <span className="font-label text-xs text-light-muted dark:text-dark-muted uppercase tracking-wider font-semibold block mb-2">
                 Player Card
               </span>
-              <PlayerCard player={MOCK_USERS[ROLES.PLAYER]} />
+              <PlayerCard player={SHOWCASE_PLAYER} />
             </div>
 
             {/* Organizer Card */}
@@ -335,7 +369,7 @@ export const ComponentShowcasePage = () => {
               <span className="font-label text-xs text-light-muted dark:text-dark-muted uppercase tracking-wider font-semibold block mb-2">
                 Organizer Card
               </span>
-              <OrganizerCard organizer={MOCK_USERS[ROLES.ORGANIZER]} />
+              <OrganizerCard organizer={SHOWCASE_ORGANIZER} />
             </div>
 
             {/* Event Card */}
@@ -526,7 +560,7 @@ export const ComponentShowcasePage = () => {
             <span className="font-label text-xs text-light-muted dark:text-dark-muted uppercase tracking-wider font-semibold">
               Responsive Data Table
             </span>
-            <Table columns={sampleColumns} data={MOCK_MATCHES} />
+            <Table columns={sampleColumns} data={SHOWCASE_MATCHES} />
           </div>
 
           {/* Pagination */}

@@ -17,6 +17,7 @@ import {
 import { matchService } from '../../services/endpoints/matchService';
 import ConfirmationDialog from '../../components/feedback/ConfirmationDialog';
 import LoadingSpinner from '../../components/feedback/LoadingSpinner';
+import MatchChatBox from '../../components/chat/MatchChatBox';
 import { toastService } from '../../components/feedback/toastService';
 import { ROUTES } from '../../constants/routes';
 
@@ -28,23 +29,79 @@ export const MatchManagementPage = () => {
   const [showCancelNotice, setShowCancelNotice] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
+  const [newEquipName, setNewEquipName] = useState('');
+  const [newEquipQty, setNewEquipQty] = useState(1);
+  const [addingEquip, setAddingEquip] = useState(false);
+  const [completingMatch, setCompletingMatch] = useState(false);
+
+  const handleCompleteMatch = async () => {
+    setCompletingMatch(true);
+    try {
+      const res = await matchService.updateMatch(match.id, { status: 'COMPLETED' });
+      if (res?.success) {
+        toastService.success('Match marked Completed! This counts toward your Organizer eligibility.');
+        setMatch((prev) => ({ ...prev, state: 'completed', status: 'COMPLETED' }));
+      }
+    } catch (err) {
+      toastService.error(err?.message || 'Failed to mark match completed.');
+    } finally {
+      setCompletingMatch(false);
+    }
+  };
+
+  const loadMatchData = async () => {
+    setLoading(true);
+    try {
+      const [res, eqRes] = await Promise.all([
+        matchService.getMatchById(matchId),
+        matchService.getMatchEquipment(matchId).catch(() => ({ data: [] })),
+      ]);
+      if (res?.data) {
+        setMatch({
+          ...res.data,
+          ...(Array.isArray(eqRes?.data) ? { equipment: eqRes.data } : {}),
+        });
+      }
+    } catch {
+      toastService.error('Failed to load match details.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchMatch = async () => {
-      setLoading(true);
-      try {
-        const res = await matchService.getMatchById(matchId || 'match_1');
-        if (res?.data) {
-          setMatch(res.data);
-        }
-      } catch {
-        toastService.error('Failed to load match details.');
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchMatch();
+    if (matchId) loadMatchData();
   }, [matchId]);
+
+  const handleAddEquipItem = async (e) => {
+    e.preventDefault();
+    if (!newEquipName.trim()) return;
+    setAddingEquip(true);
+    try {
+      await matchService.addMatchEquipment(match.id, {
+        name: newEquipName.trim(),
+        requiredQuantity: Number(newEquipQty) || 1,
+      });
+      setNewEquipName('');
+      setNewEquipQty(1);
+      toastService.success('Equipment item added.');
+      await loadMatchData();
+    } catch (err) {
+      toastService.error(err?.message || 'Could not add item.');
+    } finally {
+      setAddingEquip(false);
+    }
+  };
+
+  const handleRemoveEquipItem = async (itemId) => {
+    try {
+      await matchService.removeMatchEquipment(match.id, itemId);
+      toastService.success('Equipment item removed.');
+      await loadMatchData();
+    } catch (err) {
+      toastService.error(err?.message || 'Could not remove item.');
+    }
+  };
 
   const handleCancelMatch = async () => {
     setIsCancelling(true);
@@ -86,14 +143,10 @@ export const MatchManagementPage = () => {
 
   const isCancelled = match.state === 'cancelled' || match.status === 'CANCELLED';
   const remainingSlots = Math.max(0, match.totalSlots - match.filledSlots);
-  const checkedInCount = 4; // Mock checked in count from UIUX reference
-  const equipmentItems = match.equipment && match.equipment.length > 0
-    ? match.equipment
-    : [
-        { id: 'eq_1', name: 'Size 5 Match Football', required: 2, committed: 2, remaining: 0 },
-        { id: 'eq_2', name: 'Training Bibs (Set of 7)', required: 2, committed: 1, remaining: 1 },
-        { id: 'eq_3', name: 'First Aid & Ice Pack', required: 1, committed: 0, remaining: 1 },
-      ];
+  const checkedInCount = Array.isArray(match.participants)
+    ? match.participants.filter((p) => p.checkedIn).length
+    : 0;
+  const equipmentItems = Array.isArray(match.equipment) ? match.equipment : [];
 
   const totalRequired = equipmentItems.reduce((acc, eq) => acc + (eq.required || eq.quantity || 1), 0);
   const totalCommitted = equipmentItems.reduce((acc, eq) => acc + (eq.committed || 0), 0);
@@ -106,7 +159,7 @@ export const MatchManagementPage = () => {
   return (
     <div className="flex flex-col gap-6">
       {/* Contextual Header (Parity with UIUX/match_management/code.html lines 236-261) */}
-      <header className="sticky top-0 z-20 min-h-16 py-2 border-b border-light-border dark:border-dark-border bg-light-background/95 dark:bg-dark-background/95 backdrop-blur-md px-2 sm:px-4 flex flex-wrap items-center justify-between gap-4">
+      <header className="min-h-16 py-2 border-b border-light-border dark:border-dark-border px-2 sm:px-4 flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <Link
             to={ROUTES.ORGANIZER_MATCHES}
@@ -147,6 +200,17 @@ export const MatchManagementPage = () => {
                 <FontAwesomeIcon icon={faUsers} className="text-xs" />
                 <span>Manage Roster</span>
               </Link>
+              {match.status !== 'COMPLETED' && (
+                <button
+                  type="button"
+                  disabled={completingMatch}
+                  onClick={handleCompleteMatch}
+                  className="shrink-0 px-3.5 py-2 rounded-md bg-success text-on-success font-label text-label-md font-semibold hover:opacity-90 transition-opacity flex items-center gap-1.5 disabled:opacity-50"
+                >
+                  <FontAwesomeIcon icon={faCircleCheck} className="text-xs" />
+                  <span>{completingMatch ? 'Saving...' : 'Mark Completed'}</span>
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => setShowCancelNotice(true)}
@@ -251,54 +315,158 @@ export const MatchManagementPage = () => {
       {/* Equipment Progress & Quick Actions (Lines 303-380) */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* Equipment Pledge Progress Table (7 columns) */}
-        <section className="lg:col-span-7 rounded-lg bg-light-surface dark:bg-dark-surface border border-light-border dark:border-dark-border p-6 flex flex-col gap-4">
-          <div className="flex items-center justify-between gap-3">
+        <section className="lg:col-span-7 rounded-lg bg-light-surface dark:bg-dark-surface border border-light-border dark:border-dark-border p-4 sm:p-6 flex flex-col gap-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <h2 className="font-headline text-title-lg font-bold">Equipment Pledge Progress</h2>
             <Link
               to={ROUTES.MATCH_DETAILS.replace(':matchId', match.id)}
-              className="font-label text-label-md text-primary hover:underline flex items-center gap-1.5"
+              className="font-label text-xs sm:text-label-md text-primary hover:underline flex items-center gap-1.5"
             >
               <FontAwesomeIcon icon={faEye} className="text-xs" />
               <span>View Public Page</span>
             </Link>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="border-b border-light-border dark:border-dark-border font-label text-label-sm uppercase text-light-muted dark:text-dark-muted">
-                  <th className="py-2.5 pr-4">Item</th>
-                  <th className="py-2.5 px-3 tabular-nums">Required</th>
-                  <th className="py-2.5 px-3 tabular-nums">Committed</th>
-                  <th className="py-2.5 pl-3 tabular-nums">Remaining</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-light-border dark:divide-dark-border font-body text-body-md">
-                {equipmentItems.map((item, idx) => {
-                  const req = item.required || item.quantity || 1;
-                  const com = item.committed !== undefined ? item.committed : (idx === 0 ? req : 0);
-                  const rem = item.remaining !== undefined ? item.remaining : Math.max(0, req - com);
+          <form onSubmit={handleAddEquipItem} className="flex flex-col sm:flex-row gap-2">
+            <input
+              type="text"
+              value={newEquipName}
+              onChange={(e) => setNewEquipName(e.target.value)}
+              placeholder="Add gear requirement (e.g. Match Ball, Bibs)..."
+              className="flex-1 px-3 py-2 sm:py-1.5 rounded bg-light-background dark:bg-dark-background border border-light-border dark:border-dark-border text-xs"
+            />
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                min="1"
+                max="50"
+                value={newEquipQty}
+                onChange={(e) => setNewEquipQty(e.target.value)}
+                className="w-20 px-2.5 py-2 sm:py-1.5 rounded bg-light-background dark:bg-dark-background border border-light-border dark:border-dark-border text-xs"
+              />
+              <button
+                type="submit"
+                disabled={addingEquip}
+                className="flex-1 sm:flex-initial px-3.5 py-2 sm:py-1.5 rounded bg-primary text-on-primary font-label text-xs font-semibold hover:opacity-90 disabled:opacity-50"
+              >
+                {addingEquip ? 'Adding...' : '+ Add Item'}
+              </button>
+            </div>
+          </form>
 
-                  return (
-                    <tr key={item.id || idx}>
-                      <td className="py-3 pr-4 font-medium">{item.name}</td>
-                      <td className="py-3 px-3 tabular-nums">{req}</td>
-                      <td className={`py-3 px-3 tabular-nums font-semibold ${com >= req ? 'text-success' : 'text-warning'}`}>
-                        {com}
-                      </td>
-                      <td className={`py-3 pl-3 tabular-nums font-semibold ${rem > 0 ? 'text-accent' : 'text-light-muted dark:text-dark-muted'}`}>
-                        {rem}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+          <div>
+            {equipmentItems.length === 0 ? (
+              <p className="text-xs text-light-muted dark:text-dark-muted py-3">
+                No equipment items requested yet. Add items above so players can contribute gear.
+              </p>
+            ) : (
+              <>
+                {/* Mobile Card List (< sm) */}
+                <div className="sm:hidden flex flex-col gap-2.5">
+                  {equipmentItems.map((item, idx) => {
+                    const req = item.required || item.quantity || 1;
+                    const com = item.committed ?? 0;
+                    const rem = item.remaining !== undefined ? item.remaining : Math.max(0, req - com);
+                    return (
+                      <div
+                        key={`mob-${item.id || idx}`}
+                        className="p-3 rounded-md bg-light-background dark:bg-dark-background border border-light-border dark:border-dark-border flex flex-col gap-2"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-semibold text-sm">{item.name}</span>
+                          {item.id && (
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveEquipItem(item.id)}
+                              className="text-xs font-label text-error hover:underline"
+                            >
+                              Remove
+                            </button>
+                          )}
+                        </div>
+                        <div className="grid grid-cols-3 gap-2 text-center text-xs tabular-nums">
+                          <div className="p-1.5 rounded bg-light-surface dark:bg-dark-surface">
+                            <span className="block text-[10px] text-light-muted dark:text-dark-muted">Req</span>
+                            <strong>{req}</strong>
+                          </div>
+                          <div className="p-1.5 rounded bg-light-surface dark:bg-dark-surface">
+                            <span className="block text-[10px] text-light-muted dark:text-dark-muted">Committed</span>
+                            <strong className={com >= req ? 'text-success' : 'text-warning'}>{com}</strong>
+                          </div>
+                          <div className="p-1.5 rounded bg-light-surface dark:bg-dark-surface">
+                            <span className="block text-[10px] text-light-muted dark:text-dark-muted">Left</span>
+                            <strong className={rem > 0 ? 'text-accent' : 'text-light-muted dark:text-dark-muted'}>{rem}</strong>
+                          </div>
+                        </div>
+                        {Array.isArray(item.contributors) && item.contributors.length > 0 && (
+                          <span className="text-[11px] text-light-muted dark:text-dark-muted">
+                            By: {item.contributors.map((c) => `${c.name} (×${c.quantity})`).join(', ')}
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Desktop Table (>= sm) */}
+                <div className="hidden sm:block overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="border-b border-light-border dark:border-dark-border font-label text-label-sm uppercase text-light-muted dark:text-dark-muted">
+                    <th className="py-2.5 pr-4">Item &amp; Contributors</th>
+                    <th className="py-2.5 px-3 tabular-nums">Required</th>
+                    <th className="py-2.5 px-3 tabular-nums">Committed</th>
+                    <th className="py-2.5 px-3 tabular-nums">Remaining</th>
+                    <th className="py-2.5 pl-3 text-right">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-light-border dark:divide-dark-border font-body text-body-md">
+                  {equipmentItems.map((item, idx) => {
+                    const req = item.required || item.quantity || 1;
+                    const com = item.committed ?? 0;
+                    const rem = item.remaining !== undefined ? item.remaining : Math.max(0, req - com);
+
+                    return (
+                      <tr key={item.id || idx}>
+                        <td className="py-3 pr-4">
+                          <span className="font-medium block">{item.name}</span>
+                          {Array.isArray(item.contributors) && item.contributors.length > 0 && (
+                            <span className="text-[11px] text-light-muted dark:text-dark-muted">
+                              By: {item.contributors.map((c) => `${c.name} (×${c.quantity})`).join(', ')}
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-3 px-3 tabular-nums">{req}</td>
+                        <td className={`py-3 px-3 tabular-nums font-semibold ${com >= req ? 'text-success' : 'text-warning'}`}>
+                          {com}
+                        </td>
+                        <td className={`py-3 px-3 tabular-nums font-semibold ${rem > 0 ? 'text-accent' : 'text-light-muted dark:text-dark-muted'}`}>
+                          {rem}
+                        </td>
+                        <td className="py-3 pl-3 text-right">
+                          {item.id && (
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveEquipItem(item.id)}
+                              className="text-xs font-label text-error hover:underline"
+                            >
+                              Remove
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+                </div>
+              </>
+            )}
           </div>
         </section>
 
         {/* Organizer Quick Controls (5 columns) */}
-        <section className="lg:col-span-5 rounded-lg bg-light-surface dark:bg-dark-surface border border-light-border dark:border-dark-border p-6 flex flex-col gap-4">
+        <section className="lg:col-span-5 rounded-lg bg-light-surface dark:bg-dark-surface border border-light-border dark:border-dark-border p-4 sm:p-6 flex flex-col gap-4">
           <h2 className="font-headline text-title-lg font-bold">Organizer Controls</h2>
           <div className="flex flex-col gap-3">
             {/* Control 1: Participant Check-In & Roster */}
@@ -366,6 +534,18 @@ export const MatchManagementPage = () => {
           </div>
         </section>
       </div>
+
+      {/* Organizer Group Chat & Direct Player Messages */}
+      <section className="flex flex-col gap-3">
+        <h2 className="font-headline text-title-lg font-bold">
+          Squad Group Chat &amp; Player Messages
+        </h2>
+        <MatchChatBox
+          matchId={match.id}
+          matchTitle={match.title}
+          initialMode="group"
+        />
+      </section>
 
       {/* Confirmation Dialog for Destructive Cancel */}
       <ConfirmationDialog

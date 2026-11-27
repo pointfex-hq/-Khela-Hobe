@@ -74,7 +74,7 @@ export const PlayerMyMatchesPage = () => {
       </div>
 
       {/* Tabs */}
-      <div className="flex items-center gap-2 border-b border-light-border dark:border-dark-border">
+      <div className="flex items-center gap-2 overflow-x-auto scrollbar-none border-b border-light-border dark:border-dark-border">
         {tabs.map((tab) => {
           const isActive = activeTab === tab.id;
           return (
@@ -102,7 +102,7 @@ export const PlayerMyMatchesPage = () => {
         {matches.slice(0, activeTab === 'past' ? 4 : 2).map((match, idx) => (
           <article
             key={match.id + idx}
-            className="rounded-lg bg-light-surface dark:bg-dark-surface border border-light-border dark:border-dark-border p-6 flex flex-col justify-between gap-5 shadow-sm hover:border-primary transition-colors"
+            className="rounded-lg bg-light-surface dark:bg-dark-surface border border-light-border dark:border-dark-border p-4 sm:p-6 flex flex-col justify-between gap-4 sm:gap-5 shadow-sm hover:border-primary transition-colors"
           >
             <div className="flex flex-col gap-3">
               <div className="flex items-center justify-between gap-2">

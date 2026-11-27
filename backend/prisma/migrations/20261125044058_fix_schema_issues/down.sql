@@ -1,0 +1,2 @@
+-- No down migration needed for enabling PostGIS extension
+-- This is a one-time setup migration

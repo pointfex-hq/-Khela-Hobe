@@ -1,43 +1,33 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faLocationCrosshairs, faShieldHalved } from '@fortawesome/free-solid-svg-icons';
 import { matchService } from '../../services/endpoints/matchService';
+import { useAppStore } from '../../store/useAppStore';
 import MapView from '../../components/common/MapView';
 import Button from '../../components/common/Button';
 import toast from 'react-hot-toast';
 
 export const PlayerMapView = () => {
-  const [matches, setMatches] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const matches = useAppStore((s) => s.matches);
+  const fetchMatches = useAppStore((s) => s.fetchMatches);
+  const detectUserLocation = useAppStore((s) => s.detectUserLocation);
 
   useEffect(() => {
-    const loadMatches = async () => {
-      setLoading(true);
-      try {
-        const res = await matchService.getMatches();
-        setMatches(res.data || []);
-      } catch (err) {
-        console.error('Failed to load map data', err);
-      } finally {
-        setLoading(false);
-      }
-    };
+    fetchMatches();
+    detectUserLocation();
+  }, [fetchMatches, detectUserLocation]);
 
-    loadMatches();
-  }, []);
-
-  const handleSearchThisArea = () => {
-    toast.success('Updated matches for Dhaka & Gazipur metro bounds.');
+  const handleSearchThisArea = async () => {
+    await fetchMatches({ force: true });
+    toast.success('Refreshed nearby matches.');
   };
 
   const handleJoinMatch = async (match) => {
     try {
       const res = await matchService.joinMatch(match.id);
       toast.success(res.message || 'Action completed');
-      const refreshed = await matchService.getMatches();
-      setMatches(refreshed.data || []);
-    } catch {
-      toast.error('Failed to reserve match slot');
+    } catch (err) {
+      toast.error(err?.message || 'Failed to reserve match slot');
     }
   };
 

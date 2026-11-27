@@ -7,8 +7,8 @@ import { ROUTES } from '../../constants/routes';
 
 export const Footer = () => {
   return (
-    <footer className="mt-20 border-t border-light-border dark:border-dark-border bg-light-surface dark:bg-dark-surface">
-      <div className="max-w-7xl mx-auto px-6 py-12 lg:py-16 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-8">
+    <footer className="mt-12 sm:mt-20 border-t border-light-border dark:border-dark-border bg-light-surface dark:bg-dark-surface">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-10 lg:py-16 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-8">
         {/* Brand Column */}
         <div className="lg:col-span-2 flex flex-col gap-4">
           <div className="flex items-center gap-3">

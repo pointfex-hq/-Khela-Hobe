@@ -70,7 +70,7 @@ export const GuardianDashboardPage = () => {
             <FontAwesomeIcon icon={faShieldHalved} className="text-lg" />
           </div>
           <div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <h1 className="font-headline font-bold text-xl sm:text-2xl text-light-on-background dark:text-dark-on-background">
                 Guardian &amp; Child Safety
               </h1>

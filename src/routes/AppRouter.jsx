@@ -7,6 +7,13 @@ import { ROLES } from '../constants/roles';
 import PublicLayout from '../layouts/PublicLayout';
 import AuthLayout from '../layouts/AuthLayout';
 import DashboardLayout from '../layouts/DashboardLayout';
+import { useAuth } from '../hooks/useAuth';
+
+const AuthAwarePublicLayout = () => {
+  const { isAuthenticated } = useAuth();
+  const isAuth = typeof isAuthenticated === 'function' ? isAuthenticated() : Boolean(isAuthenticated);
+  return isAuth ? <DashboardLayout /> : <PublicLayout />;
+};
 
 // Route Guards
 import ProtectedRoute from './ProtectedRoute';
@@ -15,15 +22,18 @@ import PublicRoute from './PublicRoute';
 // Pages - Public
 import LandingPage from '../pages/public/LandingPage';
 import ExploreMatchesPage from '../pages/public/ExploreMatchesPage';
+import TournamentsPage from '../pages/public/TournamentsPage';
 import MatchDetailsPage from '../pages/public/MatchDetailsPage';
 import NotFoundPage from '../pages/public/NotFoundPage';
 import UnauthorizedPage from '../pages/public/UnauthorizedPage';
+import PaymentStatusPage from '../pages/public/PaymentStatusPage';
 import ComponentShowcasePage from '../pages/public/ComponentShowcasePage';
 import AboutUsPage from '../pages/public/AboutUsPage';
 
 // Pages - Auth
 import LoginPage from '../pages/auth/LoginPage';
 import RegisterPage from '../pages/auth/RegisterPage';
+import GoogleCallbackPage from '../pages/auth/GoogleCallbackPage';
 import ForgotPasswordPage from '../pages/auth/ForgotPasswordPage';
 import ResetPasswordPage from '../pages/auth/ResetPasswordPage';
 
@@ -45,9 +55,11 @@ import ParticipantManagementPage from '../pages/organizer/ParticipantManagementP
 import OrganizerProfilePage from '../pages/organizer/OrganizerProfilePage';
 import EventManagementPage from '../pages/organizer/EventManagementPage';
 import CreateEditEventPage from '../pages/organizer/CreateEditEventPage';
+import EventParticipantsPage from '../pages/organizer/EventParticipantsPage';
 import EventDetailsPage from '../pages/public/EventDetailsPage';
 import TicketBookingPage from '../pages/public/TicketBookingPage';
 import TicketCheckInPage from '../pages/organizer/TicketCheckInPage';
+import OrganizerEarningsPage from '../pages/organizer/OrganizerEarningsPage';
 import GuardianDashboardPage from '../pages/guardian/GuardianDashboardPage';
 import LinkedChildrenPage from '../pages/guardian/LinkedChildrenPage';
 import ChildActivityPage from '../pages/guardian/ChildActivityPage';
@@ -56,8 +68,12 @@ import SafetyAlertsPage from '../pages/guardian/SafetyAlertsPage';
 import AdminDashboardPage from '../pages/admin/AdminDashboardPage';
 import UserManagementPage from '../pages/admin/UserManagementPage';
 import SportsManagementPage from '../pages/admin/SportsManagementPage';
+import AdminLocationsPage from '../pages/admin/AdminLocationsPage';
 import MatchModerationPage from '../pages/admin/MatchModerationPage';
 import ReportManagementPage from '../pages/admin/ReportManagementPage';
+import AdminTournamentsPage from '../pages/admin/AdminTournamentsPage';
+import AdminAuditLogsPage from '../pages/admin/AdminAuditLogsPage';
+import AdminSettlementsPage from '../pages/admin/AdminSettlementsPage';
 import ScrollToTop from '../components/common/ScrollToTop';
 
 export const AppRouter = () => {
@@ -65,14 +81,21 @@ export const AppRouter = () => {
     <BrowserRouter>
       <ScrollToTop />
       <Routes>
-        {/* Public Routes with Header & Footer */}
-        <Route element={<PublicLayout />}>
-          <Route path={ROUTES.HOME} element={<LandingPage />} />
+        {/* Auth-aware Explore, Tournament & Public Profiles so signed-in users & Admins keep their Sidebar */}
+        <Route element={<AuthAwarePublicLayout />}>
           <Route path={ROUTES.EXPLORE_MATCHES} element={<ExploreMatchesPage />} />
+          <Route path={ROUTES.TOURNAMENTS} element={<TournamentsPage />} />
           <Route path={ROUTES.MATCH_DETAILS} element={<MatchDetailsPage />} />
           <Route path={ROUTES.EVENT_DETAILS} element={<EventDetailsPage />} />
           <Route path={ROUTES.TICKET_BOOKING} element={<TicketBookingPage />} />
+          <Route path={ROUTES.PUBLIC_PLAYER_PROFILE} element={<PlayerProfilePage />} />
           <Route path={ROUTES.PUBLIC_ORGANIZER_PROFILE} element={<OrganizerProfilePage />} />
+        </Route>
+
+        {/* Public Routes with Header & Footer */}
+        <Route element={<PublicLayout />}>
+          <Route path={ROUTES.HOME} element={<LandingPage />} />
+          <Route path={ROUTES.PAYMENT_STATUS} element={<PaymentStatusPage />} />
           <Route path={ROUTES.DESIGN_SYSTEM} element={<ComponentShowcasePage />} />
           <Route path={ROUTES.COMPONENTS} element={<ComponentShowcasePage />} />
           <Route path={ROUTES.ABOUT} element={<AboutUsPage />} />
@@ -98,6 +121,7 @@ export const AppRouter = () => {
               </PublicRoute>
             }
           />
+          <Route path={ROUTES.GOOGLE_CALLBACK} element={<GoogleCallbackPage />} />
           <Route
             path={ROUTES.FORGOT_PASSWORD}
             element={
@@ -115,6 +139,12 @@ export const AppRouter = () => {
             }
           />
         </Route>
+
+        {/* Convenience Auth-Aware Aliases from Alignment Guide */}
+        <Route path="/home" element={<ProtectedRoute><Navigate to={ROUTES.PLAYER_DASHBOARD} replace /></ProtectedRoute>} />
+        <Route path="/my-matches" element={<ProtectedRoute><Navigate to={ROUTES.PLAYER_MATCHES} replace /></ProtectedRoute>} />
+        <Route path="/notifications" element={<ProtectedRoute><Navigate to={ROUTES.PLAYER_NOTIFICATIONS} replace /></ProtectedRoute>} />
+        <Route path="/profile/edit" element={<ProtectedRoute><Navigate to={ROUTES.PLAYER_PROFILE_EDIT} replace /></ProtectedRoute>} />
 
         {/* Player Workspace */}
         <Route
@@ -138,32 +168,118 @@ export const AppRouter = () => {
           <Route path="matches/:matchId" element={<MatchDetailsPage />} />
         </Route>
 
-        {/* Organizer Workspace */}
+        {/* Organizer & Quick-Match Host Workspace */}
         <Route
           path="/organizer"
           element={
-            <ProtectedRoute allowedRoles={[ROLES.ORGANIZER, ROLES.ADMIN]}>
+            <ProtectedRoute allowedRoles={[ROLES.ORGANIZER, ROLES.ADMIN]} allowQuickMatchHost>
               <DashboardLayout />
             </ProtectedRoute>
           }
         >
-          <Route index element={<Navigate to={ROUTES.ORGANIZER_DASHBOARD} replace />} />
-          <Route path="dashboard" element={<OrganizerDashboardPage />} />
+          <Route
+            index
+            element={
+              <ProtectedRoute allowedRoles={[ROLES.ORGANIZER, ROLES.ADMIN]}>
+                <Navigate to={ROUTES.ORGANIZER_DASHBOARD} replace />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="dashboard"
+            element={
+              <ProtectedRoute allowedRoles={[ROLES.ORGANIZER, ROLES.ADMIN]}>
+                <OrganizerDashboardPage />
+              </ProtectedRoute>
+            }
+          />
           <Route path="create-match" element={<CreateQuickMatchPage />} />
           <Route path="my-matches" element={<MyCreatedMatchesPage />} />
-          <Route path="events" element={<EventManagementPage />} />
-          <Route path="events/create" element={<CreateEditEventPage />} />
-          <Route path="events/:eventId/edit" element={<CreateEditEventPage isEdit />} />
-          <Route path="events/:eventId" element={<EventDetailsPage />} />
+          <Route
+            path="events"
+            element={
+              <ProtectedRoute allowedRoles={[ROLES.ORGANIZER, ROLES.ADMIN]}>
+                <EventManagementPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="events/create"
+            element={
+              <ProtectedRoute allowedRoles={[ROLES.ORGANIZER, ROLES.ADMIN]}>
+                <CreateEditEventPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="events/:eventId/edit"
+            element={
+              <ProtectedRoute allowedRoles={[ROLES.ORGANIZER, ROLES.ADMIN]}>
+                <CreateEditEventPage isEdit />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="events/:eventId/participants"
+            element={
+              <ProtectedRoute allowedRoles={[ROLES.ORGANIZER, ROLES.ADMIN]}>
+                <EventParticipantsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="events/:eventId"
+            element={
+              <ProtectedRoute allowedRoles={[ROLES.ORGANIZER, ROLES.ADMIN]}>
+                <EventDetailsPage />
+              </ProtectedRoute>
+            }
+          />
           <Route path="matches/:matchId" element={<MatchManagementPage />} />
           <Route path="matches/:matchId/edit" element={<CreateQuickMatchPage isEdit />} />
           <Route path="matches/:matchId/applications" element={<ApplicationReviewPage />} />
           <Route path="matches/:matchId/participants" element={<ParticipantManagementPage />} />
           <Route path="review-applications" element={<ApplicationReviewPage />} />
-          <Route path="ticket-check-in" element={<TicketCheckInPage />} />
-          <Route path="events/:eventId/check-in" element={<TicketCheckInPage />} />
-          <Route path="profile" element={<OrganizerProfilePage />} />
-          <Route path="profile/edit" element={<OrganizerProfilePage />} />
+          <Route
+            path="ticket-check-in"
+            element={
+              <ProtectedRoute allowedRoles={[ROLES.ORGANIZER, ROLES.ADMIN]}>
+                <TicketCheckInPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="events/:eventId/check-in"
+            element={
+              <ProtectedRoute allowedRoles={[ROLES.ORGANIZER, ROLES.ADMIN]}>
+                <TicketCheckInPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="earnings"
+            element={
+              <ProtectedRoute allowedRoles={[ROLES.ORGANIZER, ROLES.ADMIN]}>
+                <OrganizerEarningsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="profile"
+            element={
+              <ProtectedRoute allowedRoles={[ROLES.ORGANIZER, ROLES.ADMIN]}>
+                <OrganizerProfilePage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="profile/edit"
+            element={
+              <ProtectedRoute allowedRoles={[ROLES.ORGANIZER, ROLES.ADMIN]}>
+                <OrganizerProfilePage />
+              </ProtectedRoute>
+            }
+          />
         </Route>
 
         {/* Guardian Workspace */}
@@ -196,9 +312,14 @@ export const AppRouter = () => {
           <Route index element={<Navigate to={ROUTES.ADMIN_DASHBOARD} replace />} />
           <Route path="dashboard" element={<AdminDashboardPage />} />
           <Route path="users" element={<UserManagementPage />} />
+          <Route path="tournaments" element={<AdminTournamentsPage />} />
+          <Route path="events/:eventId/participants" element={<EventParticipantsPage />} />
           <Route path="match-moderation" element={<MatchModerationPage />} />
           <Route path="sports" element={<SportsManagementPage />} />
+          <Route path="locations" element={<AdminLocationsPage />} />
           <Route path="reports" element={<ReportManagementPage />} />
+          <Route path="settlements" element={<AdminSettlementsPage />} />
+          <Route path="audit-logs" element={<AdminAuditLogsPage />} />
         </Route>
       </Routes>
     </BrowserRouter>

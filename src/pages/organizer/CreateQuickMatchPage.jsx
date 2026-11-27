@@ -16,7 +16,11 @@ import {
 } from '@fortawesome/free-solid-svg-icons';
 import { useAuth } from '../../hooks/useAuth';
 import { matchService } from '../../services/endpoints/matchService';
+import { uploadService } from '../../services/endpoints/uploadService';
+import { useAppStore } from '../../store/useAppStore';
+import { toBackendSkillLevel } from '../../utils/dtoMappers';
 import { toastService } from '../../components/feedback/toastService';
+import LocationPickerMap from '../../components/common/LocationPickerMap';
 import { ROUTES } from '../../constants/routes';
 
 export const CreateQuickMatchPage = ({ isEdit = false }) => {
@@ -25,11 +29,24 @@ export const CreateQuickMatchPage = ({ isEdit = false }) => {
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [fetchLoading, setFetchLoading] = useState(false);
+  const [uploadingCover, setUploadingCover] = useState(false);
+  const [coverImageUrl, setCoverImageUrl] = useState('');
+  const [pinnedLat, setPinnedLat] = useState(23.8103);
+  const [pinnedLng, setPinnedLng] = useState(90.4125);
+  const [selectedCity, setSelectedCity] = useState('Dhaka');
+  const [selectedArea, setSelectedArea] = useState('');
+  const [selectedVenueId, setSelectedVenueId] = useState('');
+  const [sportsCatalog, setSportsCatalog] = useState([]);
+  const zonesCatalog = useAppStore((s) => s.zones);
+  const venuesCatalog = useAppStore((s) => s.venues);
+  const fetchLocations = useAppStore((s) => s.fetchLocations);
+
+  useEffect(() => {
+    fetchLocations();
+  }, [fetchLocations]);
 
   // Dynamic equipment list
-  const [equipmentList, setEquipmentList] = useState([
-    { id: 'eq_1', name: 'Shuttlecock Tubes (Feather)', quantity: 2 },
-  ]);
+  const [equipmentList, setEquipmentList] = useState([]);
   const [newEquipName, setNewEquipName] = useState('');
   const [newEquipQty, setNewEquipQty] = useState(1);
   const [showAddEquip, setShowAddEquip] = useState(false);
@@ -43,52 +60,80 @@ export const CreateQuickMatchPage = ({ isEdit = false }) => {
     formState: { errors },
   } = useForm({
     defaultValues: {
-      title: 'Gazipur Evening Badminton Doubles',
-      sport: 'Badminton',
-      description: 'Friendly doubles session on Court 2. Non-marking shoes required; rotating partners every 2 sets.',
+      title: '',
+      sport: '',
+      description: '',
       date: new Date().toISOString().split('T')[0],
       startTime: '18:00',
       duration: '90 mins',
-      venue: 'Gazipur Sadar Indoor Hall, Joydebpur Road',
+      venue: '',
       minPlayers: 2,
-      maxPlayers: 4,
+      maxPlayers: 10,
       skillLevel: 'Intermediate',
       joinMode: 'open', // 'open' | 'approval'
-      turfFee: 'BDT 250',
+      turfFee: '',
+      equipmentFee: '',
+      allowOnlinePayment: true,
     },
   });
+
+  const isFullOrganizer = Boolean(
+    user?.isVerifiedOrganizer || (user?.roles || []).includes('ADMIN')
+  );
 
   // Watch form fields for live preview
   const watchedValues = watch();
 
+  // Load sports catalog from GET /sports so sportId matches backend UUIDs
+  useEffect(() => {
+    matchService
+      .getSportsList()
+      .then((res) => {
+        if (Array.isArray(res?.data) && res.data.length > 0) {
+          setSportsCatalog(res.data);
+          if (!matchId && !isEdit) {
+            setValue('sport', res.data[0].id);
+          }
+        }
+      })
+      .catch(() => {});
+  }, [matchId, isEdit, setValue]);
+
   // If edit mode, load existing match
   useEffect(() => {
-    if (matchId || isEdit) {
-      const targetId = matchId || 'match_1';
+    if (matchId) {
       setFetchLoading(true);
       matchService
-        .getMatchById(targetId)
+        .getMatchById(matchId)
         .then((res) => {
           if (res?.data) {
             const m = res.data;
+            setCoverImageUrl(m.coverImageUrl || '');
+            if (typeof m.coordinates?.lat === 'number' && typeof m.coordinates?.lng === 'number') {
+              setPinnedLat(m.coordinates.lat);
+              setPinnedLng(m.coordinates.lng);
+            }
             reset({
               title: m.title || '',
-              sport: m.sport || 'Football',
+              sport: m.sportId || m.sport || '',
               description: m.description || '',
               date: m.date || new Date().toISOString().split('T')[0],
-              startTime: m.time?.split(' - ')[0] || '18:00',
+              startTime: m.time?.split(' – ')[0] || '18:00',
               duration: '90 mins',
               venue: m.venue || m.area || '',
               minPlayers: m.minPlayers || 2,
               maxPlayers: m.totalSlots || 10,
               skillLevel: m.skillLevel || 'Intermediate',
-              joinMode: m.joinMode || 'open',
-              turfFee: m.turfFee || 'BDT 250',
+              joinMode: m.mode === 'APPLICATION_REQUIRED' ? 'approval' : 'open',
+              turfFee: m.feeAmount ? String(m.feeAmount) : '',
+              equipmentFee: m.equipmentFee ? String(m.equipmentFee) : '',
+              allowOnlinePayment: m.allowOnlinePayment ?? true,
             });
             if (m.equipment && m.equipment.length > 0) {
               setEquipmentList(
                 m.equipment.map((eq, i) => ({
                   id: eq.id || `eq_${i}`,
+                  dbId: eq.id,
                   name: eq.name,
                   quantity: eq.required || eq.quantity || 1,
                 }))
@@ -104,6 +149,27 @@ export const CreateQuickMatchPage = ({ isEdit = false }) => {
         });
     }
   }, [matchId, isEdit, reset]);
+
+  const handleCoverUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      toastService.error('Cover image must be 5 MB or smaller.');
+      return;
+    }
+    setUploadingCover(true);
+    try {
+      const res = await uploadService.uploadImage(file, 'matches');
+      if (res?.url) {
+        setCoverImageUrl(res.url);
+        toastService.success('Match cover image uploaded!');
+      }
+    } catch (err) {
+      toastService.error(err?.message || 'Failed to upload cover image.');
+    } finally {
+      setUploadingCover(false);
+    }
+  };
 
   // Handle Equipment Add
   const handleAddEquipment = (e) => {
@@ -130,12 +196,51 @@ export const CreateQuickMatchPage = ({ isEdit = false }) => {
   // Submit Handler
   const onSubmit = async (data, isDraft = false) => {
     setLoading(true);
+
+    // Compute ISO-8601 startTime and endTime from date, startTime, duration
+    const durationMinutes = parseInt(data.duration, 10) || 90;
+    const startDt = new Date(`${data.date}T${data.startTime || '18:00'}:00`);
+    const endDt = new Date(startDt.getTime() + durationMinutes * 60 * 1000);
+
+    // Match sport name/id to backend SportDto UUID
+    const matchedSport = sportsCatalog.find(
+      (s) =>
+        s.id === data.sport ||
+        s.name?.toLowerCase().includes(String(data.sport).toLowerCase()) ||
+        s.slug?.toLowerCase() === String(data.sport).toLowerCase()
+    );
+
+    const parsedFee = parseFloat(String(data.turfFee || '0').replace(/[^\d.]/g, '')) || 0;
+    const parsedEquipmentFee =
+      parseFloat(String(data.equipmentFee || '0').replace(/[^\d.]/g, '')) || 0;
+
     const payload = {
-      ...data,
-      equipment: equipmentList,
-      organizerName: user?.name || 'Tanvir Hasan',
-      status: isDraft ? 'DRAFT' : 'ACTIVE',
-      state: isDraft ? 'draft' : 'open',
+      title: data.title,
+      description: data.description || undefined,
+      sportId: matchedSport?.id || data.sport,
+      ...(selectedVenueId ? { venueId: selectedVenueId } : {}),
+      location: {
+        name: data.venue,
+        area: selectedArea || data.venue,
+        city: selectedCity || 'Dhaka',
+        latitude: pinnedLat,
+        longitude: pinnedLng,
+        source: 'MAP_PIN',
+      },
+      startTime: startDt.toISOString(),
+      endTime: endDt.toISOString(),
+      capacity: Math.max(2, Math.min(200, parseInt(data.maxPlayers, 10) || 10)),
+      mode: data.joinMode === 'approval' ? 'APPLICATION_REQUIRED' : 'INSTANT_JOIN',
+      skillLevel: toBackendSkillLevel(data.skillLevel),
+      feeAmount: parsedFee,
+      equipmentFee: parsedEquipmentFee,
+      allowOnlinePayment: isFullOrganizer ? Boolean(data.allowOnlinePayment) : false,
+      ...(coverImageUrl ? { coverImageUrl } : {}),
+      equipment: equipmentList.map((eq) => ({
+        ...(eq.dbId ? { id: eq.dbId } : {}),
+        name: eq.name,
+        quantity: Math.max(1, Number(eq.quantity) || 1),
+      })),
     };
 
     try {
@@ -144,16 +249,12 @@ export const CreateQuickMatchPage = ({ isEdit = false }) => {
         toastService.success('Match updated successfully!');
         navigate(`${ROUTES.ORGANIZER_MATCH_MANAGEMENT.replace(':matchId', matchId)}`);
       } else {
-        const res = await matchService.createMatch(payload);
-        toastService.success(isDraft ? 'Match saved as draft!' : 'Match published live!');
-        if (res?.data?.id) {
-          navigate(ROUTES.ORGANIZER_MATCHES);
-        } else {
-          navigate(ROUTES.ORGANIZER_MATCHES);
-        }
+        await matchService.createMatch(payload);
+        toastService.success(isDraft ? 'Match saved!' : 'Match published live!');
+        navigate(ROUTES.ORGANIZER_MATCHES);
       }
-    } catch {
-      toastService.error('An error occurred while saving the match.');
+    } catch (err) {
+      toastService.error(err?.message || 'An error occurred while saving the match.');
     } finally {
       setLoading(false);
     }
@@ -162,7 +263,7 @@ export const CreateQuickMatchPage = ({ isEdit = false }) => {
   return (
     <div className="flex flex-col gap-6">
       {/* Contextual Header */}
-      <header className="sticky top-0 z-20 min-h-16 py-2 border-b border-light-border dark:border-dark-border bg-light-background/95 dark:bg-dark-background/95 backdrop-blur-md px-2 sm:px-4 flex flex-wrap items-center justify-between gap-4">
+      <header className="min-h-16 py-2 border-b border-light-border dark:border-dark-border px-2 sm:px-4 flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <Link
             to={ROUTES.ORGANIZER_MATCHES}
@@ -231,12 +332,22 @@ export const CreateQuickMatchPage = ({ isEdit = false }) => {
                   {...register('sport', { required: true })}
                   className="w-full px-3.5 py-2.5 rounded-md bg-light-background dark:bg-dark-background border border-light-border dark:border-dark-border font-body text-body-md focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none"
                 >
-                  <option value="Badminton">Badminton</option>
-                  <option value="Football">Football 7v7</option>
-                  <option value="Cricket">Cricket (Tape-Ball)</option>
-                  <option value="Basketball">Basketball 3x3</option>
-                  <option value="Table Tennis">Table Tennis</option>
-                  <option value="Volleyball">Volleyball</option>
+                  {sportsCatalog.length > 0 ? (
+                    sportsCatalog.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name}
+                      </option>
+                    ))
+                  ) : (
+                    <>
+                      <option value="Badminton">Badminton</option>
+                      <option value="Football">Football 7v7</option>
+                      <option value="Cricket">Cricket (Tape-Ball)</option>
+                      <option value="Basketball">Basketball 3x3</option>
+                      <option value="Table Tennis">Table Tennis</option>
+                      <option value="Volleyball">Volleyball</option>
+                    </>
+                  )}
                 </select>
               </label>
             </div>
@@ -250,6 +361,38 @@ export const CreateQuickMatchPage = ({ isEdit = false }) => {
                 className="w-full px-3.5 py-2.5 rounded-md bg-light-background dark:bg-dark-background border border-light-border dark:border-dark-border font-body text-body-md focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none resize-none"
               />
             </label>
+
+            <div className="flex flex-col gap-2">
+              <span className="font-label text-label-md">Cover Image (Optional)</span>
+              <div className="flex flex-wrap items-center gap-3">
+                <input
+                  type="file"
+                  accept="image/png, image/jpeg, image/webp"
+                  onChange={handleCoverUpload}
+                  disabled={uploadingCover}
+                  className="text-xs font-body text-light-muted dark:text-dark-muted file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border file:border-light-border dark:file:border-dark-border file:bg-light-surface-elevated dark:file:bg-dark-surface-elevated file:font-label file:text-xs"
+                />
+                {uploadingCover && (
+                  <span className="text-xs text-primary font-label">Uploading to S3...</span>
+                )}
+                {coverImageUrl && (
+                  <button
+                    type="button"
+                    onClick={() => setCoverImageUrl('')}
+                    className="text-xs text-error font-label hover:underline"
+                  >
+                    Remove Cover
+                  </button>
+                )}
+              </div>
+              {coverImageUrl && (
+                <img
+                  src={coverImageUrl}
+                  alt="Match cover preview"
+                  className="w-full max-w-sm h-32 object-cover rounded-md border border-light-border dark:border-dark-border mt-1"
+                />
+              )}
+            </div>
           </section>
 
           {/* Section 2: Schedule & Venue (Asia/Dhaka) */}
@@ -260,6 +403,7 @@ export const CreateQuickMatchPage = ({ isEdit = false }) => {
                 GMT+6 Bangladesh Standard Time
               </span>
             </div>
+
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <label className="flex flex-col gap-1.5">
                 <span className="font-label text-label-md">Match Date</span>
@@ -292,7 +436,61 @@ export const CreateQuickMatchPage = ({ isEdit = false }) => {
               </label>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <label className="flex flex-col gap-1.5">
+                <span className="font-label text-label-md">Pick Saved Venue / Turf (Optional)</span>
+                <select
+                  value={selectedVenueId}
+                  onChange={(e) => {
+                    const vid = e.target.value;
+                    setSelectedVenueId(vid);
+                    const v = venuesCatalog.find((item) => item.id === vid);
+                    if (v) {
+                      setValue('venue', v.name);
+                      setSelectedCity(v.city || 'Dhaka');
+                      setSelectedArea(v.area || v.name);
+                      setPinnedLat(v.latitude);
+                      setPinnedLng(v.longitude);
+                    }
+                  }}
+                  className="w-full px-3.5 py-2.5 rounded-md bg-light-background dark:bg-dark-background border border-light-border dark:border-dark-border font-body text-body-md focus:border-primary focus:outline-none"
+                >
+                  <option value="">Custom Venue Name &amp; Map Pin</option>
+                  {venuesCatalog.map((v) => (
+                    <option key={v.id} value={v.id}>
+                      {v.name} ({v.venueType} • {v.area || v.city})
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="flex flex-col gap-1.5">
+                <span className="font-label text-label-md">Bangladesh Zone / City</span>
+                <select
+                  value={selectedArea}
+                  onChange={(e) => {
+                    const chosenArea = e.target.value;
+                    setSelectedArea(chosenArea);
+                    const z = zonesCatalog.find((item) => item.area === chosenArea);
+                    if (z) {
+                      setSelectedCity(z.city);
+                      setPinnedLat(z.latitude);
+                      setPinnedLng(z.longitude);
+                    }
+                  }}
+                  className="w-full px-3.5 py-2.5 rounded-md bg-light-background dark:bg-dark-background border border-light-border dark:border-dark-border font-body text-body-md focus:border-primary focus:outline-none"
+                >
+                  <option value="">Select Zone / Area</option>
+                  {zonesCatalog.map((z) => (
+                    <option key={z.id} value={z.area}>
+                      {z.area}, {z.city} ({z.division})
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <label className="md:col-span-2 flex flex-col gap-1.5">
                 <span className="font-label text-label-md">Venue or Area</span>
                 <input
@@ -305,14 +503,58 @@ export const CreateQuickMatchPage = ({ isEdit = false }) => {
               </label>
 
               <label className="flex flex-col gap-1.5">
-                <span className="font-label text-label-md">Turf Fee Split (Optional)</span>
+                <span className="font-label text-label-md">Turf Fee (BDT)</span>
                 <input
-                  type="text"
+                  type="number"
+                  min="0"
                   {...register('turfFee')}
-                  placeholder="e.g. BDT 250 / player"
+                  placeholder="e.g. 250"
                   className="w-full px-3.5 py-2.5 rounded-md bg-light-background dark:bg-dark-background border border-light-border dark:border-dark-border font-body text-body-md focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none"
                 />
               </label>
+
+              <label className="flex flex-col gap-1.5">
+                <span className="font-label text-label-md">Equipment Fee (BDT)</span>
+                <input
+                  type="number"
+                  min="0"
+                  {...register('equipmentFee')}
+                  placeholder="e.g. 50"
+                  className="w-full px-3.5 py-2.5 rounded-md bg-light-background dark:bg-dark-background border border-light-border dark:border-dark-border font-body text-body-md focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none"
+                />
+              </label>
+            </div>
+
+            {isFullOrganizer ? (
+              <label className="flex items-center gap-2.5 text-xs text-light-muted dark:text-dark-muted cursor-pointer">
+                <input
+                  type="checkbox"
+                  {...register('allowOnlinePayment')}
+                  className="rounded accent-primary w-4 h-4"
+                />
+                <span>
+                  Allow players to pay match fee online via SSLCommerz (in addition to Pay at Venue)
+                </span>
+              </label>
+            ) : (
+              <div className="p-3 rounded-md bg-warning/10 border border-warning/30 text-xs text-warning font-medium">
+                Quick Match Host mode: Turf &amp; Equipment fees are strictly payable at the venue. Online SSLCommerz checkout is reserved for Full Organizers.
+              </div>
+            )}
+
+            {/* Interactive Map Location Pinpoint */}
+            <div className="pt-2 border-t border-light-border dark:border-dark-border">
+              <span className="font-label text-label-md block mb-2">
+                Pinpoint Match Location on Map
+              </span>
+              <LocationPickerMap
+                latitude={pinnedLat}
+                longitude={pinnedLng}
+                onChange={(lat, lng) => {
+                  setPinnedLat(lat);
+                  setPinnedLng(lng);
+                }}
+              />
             </div>
           </section>
 
@@ -494,7 +736,7 @@ export const CreateQuickMatchPage = ({ isEdit = false }) => {
         </form>
 
         {/* Live Match Preview (4 columns, Sticky Parity) */}
-        <aside className="lg:col-span-4 sticky top-24 flex flex-col gap-4">
+        <aside className="lg:col-span-4 lg:sticky lg:top-24 flex flex-col gap-4">
           <div className="flex items-center justify-between">
             <span className="font-label text-label-sm uppercase tracking-wider text-light-muted dark:text-dark-muted">
               Live Player Preview
@@ -509,7 +751,7 @@ export const CreateQuickMatchPage = ({ isEdit = false }) => {
           <article className="rounded-lg bg-light-surface dark:bg-dark-surface border border-light-border dark:border-dark-border p-5 flex flex-col gap-4 shadow-sm">
             <div className="flex items-center justify-between gap-2">
               <span className="px-2.5 py-1 rounded-full bg-light-surface-elevated dark:bg-dark-surface-elevated text-primary font-label text-label-sm font-semibold">
-                {watchedValues.sport || 'Sports'}
+                {sportsCatalog.find((s) => s.id === watchedValues.sport)?.name || watchedValues.sport || 'Sports'}
               </span>
               <span
                 className={`px-2.5 py-1 rounded-full font-label text-label-sm font-semibold ${
@@ -556,7 +798,7 @@ export const CreateQuickMatchPage = ({ isEdit = false }) => {
 
             <footer className="pt-3 border-t border-light-border dark:border-dark-border flex items-center justify-between">
               <span className="font-body text-body-sm text-light-muted dark:text-dark-muted">
-                Org: {user?.name || 'Tanvir Hasan'}
+                Org: {user?.name || user?.fullName || 'Organizer'}
               </span>
               <span className="px-4 py-2 rounded-md bg-primary text-on-primary font-label text-label-md font-semibold opacity-90 cursor-default">
                 Join Match

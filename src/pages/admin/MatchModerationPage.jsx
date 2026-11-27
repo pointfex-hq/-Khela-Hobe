@@ -15,8 +15,10 @@ import {
   faClock,
   faShieldHalved,
   faRotateRight,
+  faTrophy,
 } from '@fortawesome/free-solid-svg-icons';
 import { moderationService } from '../../services/endpoints/moderationService';
+import { eventService } from '../../services/endpoints/eventService';
 import { ROUTES } from '../../constants/routes';
 import { toastService } from '../../components/feedback/toastService';
 import Button from '../../components/common/Button';
@@ -29,7 +31,9 @@ import ConfirmationDialog from '../../components/feedback/ConfirmationDialog';
 export const MatchModerationPage = () => {
   const navigate = useNavigate();
 
+  const [moderationTab, setModerationTab] = useState('matches'); // 'matches' | 'tournaments'
   const [matches, setMatches] = useState([]);
+  const [tournaments, setTournaments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [sportFilter, setSportFilter] = useState('All Sports');
@@ -46,21 +50,42 @@ export const MatchModerationPage = () => {
     action: 'suspend', // 'suspend', 'approve', 'flag'
   });
 
+  const [tournamentNoteById, setTournamentNoteById] = useState({});
+  const [moderatingTournamentId, setModeratingTournamentId] = useState(null);
+
   const fetchMatches = async () => {
     try {
       setLoading(true);
-      const res = await moderationService.getPendingMatches({
-        search,
-        sport: sportFilter,
-        status: statusFilter,
-      });
+      const [res, tourRes] = await Promise.all([
+        moderationService.getPendingMatches({
+          search,
+          sport: sportFilter,
+          status: statusFilter,
+        }),
+        eventService.getAdminTournaments('ALL').catch(() => ({ data: [] })),
+      ]);
       if (res.success) {
         setMatches(res.data || []);
       }
+      setTournaments(tourRes.data || []);
     } catch (err) {
       console.error('Failed to load matches for moderation:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleModerateTournament = async (tournament, action) => {
+    setModeratingTournamentId(tournament.id);
+    try {
+      const note = tournamentNoteById[tournament.id] || '';
+      const res = await eventService.moderateTournament(tournament.id, action, note);
+      toastService.success(res.message);
+      await fetchMatches();
+    } catch (err) {
+      toastService.error(err?.message || 'Failed to moderate tournament.');
+    } finally {
+      setModeratingTournamentId(null);
     }
   };
 
@@ -162,22 +187,109 @@ export const MatchModerationPage = () => {
         </Button>
       </form>
 
-      {/* Policy Clarification Banner (Reference lines 245-250) */}
-      <div className="rounded-lg bg-light-surface-elevated dark:bg-dark-surface-elevated border border-light-border dark:border-dark-border p-4 flex items-center gap-3 shadow-sm">
-        <span className="w-8 h-8 rounded-full bg-primary/15 text-primary flex items-center justify-center shrink-0">
-          <FontAwesomeIcon icon={faBolt} className="text-sm" />
-        </span>
-        <p className="font-body text-xs sm:text-sm text-light-muted dark:text-dark-muted leading-relaxed">
-          <strong className="text-light-on-surface dark:text-dark-on-surface font-semibold">
-            Post-Publication Moderation:
-          </strong>{' '}
-          Quick Matches publish immediately without pre-approval. Use this console to investigate player
-          reports and suspend unsafe listings.
-        </p>
+      {/* Policy Clarification Banner */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="inline-flex p-1 rounded-lg bg-light-surface dark:bg-dark-surface border border-light-border dark:border-dark-border">
+          <button
+            type="button"
+            onClick={() => setModerationTab('matches')}
+            className={`px-4 py-2 rounded-md font-label text-xs font-semibold ${
+              moderationTab === 'matches' ? 'bg-primary text-on-primary' : 'text-light-muted dark:text-dark-muted'
+            }`}
+          >
+            Matches Moderation ({matches.length})
+          </button>
+          <button
+            type="button"
+            onClick={() => setModerationTab('tournaments')}
+            className={`px-4 py-2 rounded-md font-label text-xs font-semibold ${
+              moderationTab === 'tournaments' ? 'bg-primary text-on-primary' : 'text-light-muted dark:text-dark-muted'
+            }`}
+          >
+            Tournaments Moderation ({tournaments.filter((t) => t.status === 'PENDING_APPROVAL').length} Pending)
+          </button>
+        </div>
       </div>
 
-      {/* Moderation Cards List (Reference lines 253-288) */}
-      {loading ? (
+      {moderationTab === 'tournaments' ? (
+        <div className="flex flex-col gap-4">
+          {tournaments.length === 0 ? (
+            <EmptyState
+              icon={faTrophy}
+              title="No tournaments submitted yet"
+              description="Organizer tournaments awaiting moderation or reviewed will appear here."
+            />
+          ) : (
+            tournaments.map((t) => (
+              <article
+                key={t.id}
+                className="rounded-lg bg-light-surface dark:bg-dark-surface border border-light-border dark:border-dark-border p-5 flex flex-col gap-3"
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={`px-2.5 py-0.5 rounded-full text-xs font-label font-semibold ${
+                        t.status === 'APPROVED'
+                          ? 'bg-success text-on-success'
+                          : t.status === 'REJECTED'
+                            ? 'bg-error/15 text-error'
+                            : 'bg-warning/20 text-warning'
+                      }`}
+                    >
+                      {t.status}
+                    </span>
+                    <span className="font-label text-xs font-semibold text-primary">{t.sport}</span>
+                    <span className="text-xs text-light-muted dark:text-dark-muted">
+                      {t.venueName} ({t.area || t.city})
+                    </span>
+                  </div>
+                  <span className="font-mono text-xs text-light-muted dark:text-dark-muted">
+                    {t.startDate} • {t.maxTeams} Teams • {t.fee}
+                  </span>
+                </div>
+
+                <h2 className="font-headline font-bold text-lg">{t.title}</h2>
+                <p className="font-body text-xs text-light-muted dark:text-dark-muted">
+                  Organizer: <strong>{t.organizer?.name || 'Organizer'}</strong>
+                  {t.championPrize ? ` • Champion Prize: ${t.championPrize}` : ''}
+                  {t.prizePool ? ` • Pool: ${t.prizePool}` : ''}
+                </p>
+                {t.description && <p className="font-body text-xs">{t.description}</p>}
+
+                <div className="flex flex-col sm:flex-row gap-2 pt-2 border-t border-light-border dark:border-dark-border">
+                  <input
+                    type="text"
+                    placeholder="Optional moderation note for organizer..."
+                    value={tournamentNoteById[t.id] || ''}
+                    onChange={(e) =>
+                      setTournamentNoteById((prev) => ({ ...prev, [t.id]: e.target.value }))
+                    }
+                    className="flex-1 px-3 py-1.5 rounded bg-light-background dark:bg-dark-background border border-light-border dark:border-dark-border text-xs"
+                  />
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      disabled={moderatingTournamentId === t.id}
+                      onClick={() => handleModerateTournament(t, 'APPROVE')}
+                      className="px-3.5 py-1.5 rounded bg-success text-on-success text-xs font-semibold disabled:opacity-50"
+                    >
+                      Approve
+                    </button>
+                    <button
+                      type="button"
+                      disabled={moderatingTournamentId === t.id}
+                      onClick={() => handleModerateTournament(t, 'REJECT')}
+                      className="px-3.5 py-1.5 rounded bg-error text-white text-xs font-semibold disabled:opacity-50"
+                    >
+                      Reject
+                    </button>
+                  </div>
+                </div>
+              </article>
+            ))
+          )}
+        </div>
+      ) : loading ? (
         <div className="flex flex-col items-center justify-center min-h-[350px]">
           <LoadingSpinner size="lg" text="Loading match moderation queue..." />
         </div>

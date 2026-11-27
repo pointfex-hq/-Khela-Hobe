@@ -1,40 +1,69 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, useMemo } from 'react';
 import { authService } from '../services/endpoints/authService';
 import { tokenService } from '../utils/tokenService';
-import { ROLES } from '../constants/roles';
-import { MOCK_USERS } from '../mocks/mockData';
+import { normalizeUser } from '../utils/dtoMappers';
+import { useAppStore } from '../store/useAppStore';
 import toast from 'react-hot-toast';
 
 const AuthContext = createContext(null);
 
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null);
+  const [user, setUser] = useState(() => {
+    const hasToken = tokenService.getAccessToken();
+    return hasToken ? useAppStore.getState().cachedUser : null;
+  });
   const [token, setToken] = useState(() => tokenService.getAccessToken());
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(() => {
+    const hasToken = tokenService.getAccessToken();
+    return Boolean(hasToken && !useAppStore.getState().cachedUser);
+  });
 
-  // Load initial session on startup
+  // Load initial session on startup ONLY when a valid token exists;
+  // use browser cache immediately when fresh so every route mount doesn't hit DB.
   useEffect(() => {
     let isMounted = true;
 
     const initializeAuth = async () => {
       const storedToken = tokenService.getAccessToken();
-      if (storedToken) {
-        try {
-          const userData = await authService.getCurrentUser();
-          if (isMounted) {
-            setUser(userData);
-          }
-        } catch (err) {
-          console.warn('Session verification failed, logging out', err);
-          tokenService.clearTokens();
-          if (isMounted) {
-            setUser(null);
-            setToken(null);
-          }
+      if (!storedToken) {
+        tokenService.clearTokens();
+        useAppStore.getState().clearCachedUser();
+        if (isMounted) {
+          setUser(null);
+          setToken(null);
+          setIsLoading(false);
         }
+        return;
       }
-      if (isMounted) {
+
+      const { cachedUser, userCachedAt } = useAppStore.getState();
+      const cacheFresh = cachedUser && userCachedAt && Date.now() - userCachedAt < 5 * 60 * 1000;
+      if (cacheFresh && isMounted) {
+        setUser(cachedUser);
+        setToken(storedToken);
         setIsLoading(false);
+        return;
+      }
+
+      try {
+        const userData = await authService.getCurrentUser();
+        if (isMounted) {
+          setUser(userData);
+          useAppStore.getState().setCachedUser(userData);
+          setToken(tokenService.getAccessToken());
+        }
+      } catch (err) {
+        console.warn('Session verification failed, clearing session:', err?.message || err);
+        tokenService.clearTokens();
+        useAppStore.getState().clearCachedUser();
+        if (isMounted) {
+          setUser(null);
+          setToken(null);
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
+        }
       }
     };
 
@@ -46,22 +75,25 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   /**
-   * Log in user with credentials
+   * Log in user with email & password
    */
   const login = useCallback(async (credentials) => {
     setIsLoading(true);
     try {
       const result = await authService.login(credentials);
-      if (result.user) {
-        setUser(result.user);
+      if (result?.user && result?.accessToken) {
+        const normalized = normalizeUser(result.user);
+        setUser(normalized);
+        useAppStore.getState().setCachedUser(normalized);
         setToken(result.accessToken);
-        toast.success(`Welcome back, ${result.user.name}`);
-        return { success: true, user: result.user };
+        toast.success(`Welcome back, ${normalized.name || normalized.fullName}`);
+        return { success: true, user: normalized };
       }
-      throw new Error(result.message || 'Login failed');
+      throw new Error(result?.message || 'Login failed');
     } catch (err) {
-      toast.error(err.message || 'Invalid credentials');
-      return { success: false, error: err.message };
+      const msg = err?.message || 'Invalid email or password';
+      toast.error(msg);
+      return { success: false, error: msg };
     } finally {
       setIsLoading(false);
     }
@@ -74,16 +106,23 @@ export const AuthProvider = ({ children }) => {
     setIsLoading(true);
     try {
       const result = await authService.register(userData);
-      if (result.user) {
-        setUser(result.user);
+      if (result?.user && result?.accessToken) {
+        const normalized = normalizeUser(result.user);
+        setUser(normalized);
+        useAppStore.getState().setCachedUser(normalized);
         setToken(result.accessToken);
-        toast.success(`Welcome to Khela Hobe, ${result.user.name}!`);
-        return { success: true, user: result.user };
+        toast.success(`Welcome to Khela Hobe, ${normalized.name || normalized.fullName}!`);
+        return { success: true, user: normalized };
       }
-      throw new Error(result.message || 'Registration failed');
+      if (result?.success) {
+        toast.success('Registration successful. Please login.');
+        return { success: true, user: null };
+      }
+      throw new Error(result?.message || 'Registration failed');
     } catch (err) {
-      toast.error(err.message || 'Registration failed');
-      return { success: false, error: err.message };
+      const msg = err?.message || 'Registration failed';
+      toast.error(msg);
+      return { success: false, error: msg };
     } finally {
       setIsLoading(false);
     }
@@ -96,17 +135,35 @@ export const AuthProvider = ({ children }) => {
     try {
       await authService.logout();
     } finally {
+      tokenService.clearTokens();
+      useAppStore.getState().clearCachedUser();
       setUser(null);
       setToken(null);
       toast.success('Signed out successfully');
+      if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
+        window.location.href = '/login';
+      }
     }
   }, []);
 
   /**
-   * Get current user (resolves existing state or re-fetches)
+   * Update in-memory user after profile edits
+   */
+  const updateUserState = useCallback((updatedUser) => {
+    if (!updatedUser) return;
+    setUser((prev) => {
+      const merged = normalizeUser({ ...(prev || {}), ...updatedUser });
+      useAppStore.getState().setCachedUser(merged);
+      return merged;
+    });
+  }, []);
+
+  /**
+   * Get current user (resolves existing state or re-fetches if valid token exists)
    */
   const getCurrentUser = useCallback(async () => {
     if (user) return user;
+    if (!tokenService.getAccessToken()) return null;
     try {
       const freshUser = await authService.getCurrentUser();
       if (freshUser) setUser(freshUser);
@@ -124,6 +181,9 @@ export const AuthProvider = ({ children }) => {
       const result = await authService.refreshToken();
       if (result?.accessToken) {
         setToken(result.accessToken);
+        if (result.user) {
+          setUser(normalizeUser(result.user));
+        }
         return result.accessToken;
       }
       return null;
@@ -134,37 +194,18 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   /**
-   * Check if user is authenticated (callable function)
-   */
-  const isAuthenticated = useCallback(() => {
-    return Boolean(user && token);
-  }, [user, token]);
-
-  /**
-   * Fast Demo Workspace Switcher (Player, Organizer, Guardian, Admin)
-   */
-  const switchDemoRole = useCallback((roleName) => {
-    const targetUser = MOCK_USERS[roleName] || MOCK_USERS[ROLES.PLAYER];
-    const mockToken = `mock.jwt.token.${roleName.toLowerCase()}`;
-    tokenService.setTokens(mockToken, `${mockToken}.refresh`);
-    setUser(targetUser);
-    setToken(mockToken);
-    toast.success(`Active workspace switched to ${roleName}`);
-    return targetUser;
-  }, []);
-
-  /**
    * Send password reset request
    */
   const forgotPassword = useCallback(async (identifier) => {
     setIsLoading(true);
     try {
       const res = await authService.forgotPassword(identifier);
-      toast.success(res.message || 'Verification code sent');
+      toast.success(res?.message || 'Verification code sent');
       return { success: true, ...res };
     } catch (err) {
-      toast.error(err.message || 'Failed to send reset code');
-      return { success: false, error: err.message };
+      const msg = err?.message || 'Failed to send reset code';
+      toast.error(msg);
+      return { success: false, error: msg };
     } finally {
       setIsLoading(false);
     }
@@ -177,21 +218,45 @@ export const AuthProvider = ({ children }) => {
     setIsLoading(true);
     try {
       const res = await authService.resetPassword({ code, password });
-      toast.success(res.message || 'Password successfully updated');
+      toast.success(res?.message || 'Password successfully updated');
       return { success: true, ...res };
     } catch (err) {
-      toast.error(err.message || 'Failed to reset password');
-      return { success: false, error: err.message };
+      const msg = err?.message || 'Failed to reset password';
+      toast.error(msg);
+      return { success: false, error: msg };
     } finally {
       setIsLoading(false);
     }
   }, []);
 
-  const isAuthDirect = Boolean(user && token);
+  /**
+   * Complete Google OAuth sign-in from one-time callback code
+   */
+  const completeGoogleLogin = useCallback(async (code) => {
+    setIsLoading(true);
+    try {
+      const result = await authService.completeGoogleLogin(code);
+      if (result?.user && result?.accessToken) {
+        const normalized = normalizeUser(result.user);
+        setUser(normalized);
+        useAppStore.getState().setCachedUser(normalized);
+        setToken(result.accessToken);
+        toast.success(`Signed in as ${normalized.name || normalized.fullName}`);
+        return { success: true, user: normalized };
+      }
+      throw new Error('Google login failed');
+    } catch (err) {
+      const msg = err?.message || 'Google sign-in failed';
+      toast.error(msg);
+      return { success: false, error: msg };
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  const isAuthDirect = Boolean(user && token && tokenService.isValidToken(token));
 
   const value = useMemo(() => {
-    // Attach boolean convenience properties directly onto isAuthenticated function
-    // so `isAuthenticated()` and `if (isAuthenticated.value)` both work.
     const authFn = () => isAuthDirect;
     authFn.valueOf = () => isAuthDirect;
     authFn.toString = () => String(isAuthDirect);
@@ -201,6 +266,7 @@ export const AuthProvider = ({ children }) => {
       user,
       token,
       role: user?.role || null,
+      roles: user?.roles || (user?.role ? [user.role] : []),
       isLoggedIn: isAuthDirect,
       isAuth: isAuthDirect,
       isAuthenticated: authFn,
@@ -208,11 +274,12 @@ export const AuthProvider = ({ children }) => {
       login,
       register,
       logout,
+      updateUserState,
       getCurrentUser,
       refreshToken,
-      switchDemoRole,
       forgotPassword,
       resetPassword,
+      completeGoogleLogin,
     };
   }, [
     user,
@@ -222,11 +289,12 @@ export const AuthProvider = ({ children }) => {
     login,
     register,
     logout,
+    updateUserState,
     getCurrentUser,
     refreshToken,
-    switchDemoRole,
     forgotPassword,
     resetPassword,
+    completeGoogleLogin,
   ]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -108,7 +108,7 @@ export const MyCreatedMatchesPage = () => {
   return (
     <div className="flex flex-col gap-6">
       {/* Contextual Header (Parity with UIUX/my_created_matches/code.html lines 230-245) */}
-      <header className="sticky top-0 z-20 min-h-16 py-2 border-b border-light-border dark:border-dark-border bg-light-background/95 dark:bg-dark-background/95 backdrop-blur-md px-2 sm:px-4 flex flex-wrap items-center justify-between gap-4">
+      <header className="min-h-16 py-2 border-b border-light-border dark:border-dark-border px-2 sm:px-4 flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="font-headline text-title-lg font-bold">Created Matches</h1>
           <p className="font-body text-body-sm text-light-muted dark:text-dark-muted">

@@ -12,15 +12,26 @@ import {
   faTrashCan,
   faShieldHalved,
   faClock,
+  faPhone,
+  faStar,
 } from '@fortawesome/free-solid-svg-icons';
 import { profileService } from '../../services/endpoints/profileService';
+import { useAuth } from '../../hooks/useAuth';
+import { useAppStore } from '../../store/useAppStore';
 import { toastService } from '../../components/feedback/toastService';
 import LoadingSpinner from '../../components/feedback/LoadingSpinner';
+import GoogleAccountCard from '../../components/auth/GoogleAccountCard';
 import { ROUTES } from '../../constants/routes';
 
 export const PlayerEditProfilePage = () => {
   const navigate = useNavigate();
+  const { updateUserState } = useAuth();
   const fileInputRef = useRef(null);
+
+  const sportsCatalog = useAppStore((s) => s.sports);
+  const fetchSports = useAppStore((s) => s.fetchSports);
+  const zones = useAppStore((s) => s.zones);
+  const fetchLocations = useAppStore((s) => s.fetchLocations);
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -32,6 +43,7 @@ export const PlayerEditProfilePage = () => {
 
   // Sports list state
   const [sportsList, setSportsList] = useState([]);
+  const [selectedSportIdToAdd, setSelectedSportIdToAdd] = useState('');
 
   // Weekly availability
   const [availability, setAvailability] = useState([]);
@@ -46,11 +58,15 @@ export const PlayerEditProfilePage = () => {
     register,
     handleSubmit,
     reset,
+    watch,
+    setValue,
     formState: { errors },
   } = useForm({
     defaultValues: {
       name: '',
-      area: 'Banani / Gulshan, Dhaka North',
+      phoneNumber: '',
+      city: 'Dhaka',
+      area: '',
       bio: '',
     },
   });
@@ -59,18 +75,24 @@ export const PlayerEditProfilePage = () => {
     const fetchProfile = async () => {
       setLoading(true);
       try {
-        const res = await profileService.getPlayerProfile();
+        const [res, loadedSports] = await Promise.all([
+          profileService.getPlayerProfile(),
+          fetchSports(),
+          fetchLocations(),
+        ]);
+        if (Array.isArray(loadedSports) && loadedSports.length > 0) {
+          setSelectedSportIdToAdd((prev) => prev || loadedSports[0].id);
+        }
         if (res?.data) {
           const d = res.data;
           reset({
             name: d.name || '',
-            area: d.area || 'Banani / Gulshan, Dhaka North',
+            phoneNumber: d.phoneNumber || d.phone || '',
+            city: d.city || 'Dhaka',
+            area: d.area || '',
             bio: d.bio || '',
           });
-          setAvatarUrl(
-            d.avatar ||
-              'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80'
-          );
+          setAvatarUrl(d.avatar || '');
           setSportsList(d.sportsPreferences || []);
           setAvailability(d.weeklyAvailability || [
             'Weekdays 6:00 PM – 10:00 PM',
@@ -89,7 +111,7 @@ export const PlayerEditProfilePage = () => {
     };
 
     fetchProfile();
-  }, [reset]);
+  }, [reset, fetchSports, fetchLocations]);
 
   // Handle Photo Change
   const handlePhotoSelect = async (e) => {
@@ -108,34 +130,56 @@ export const PlayerEditProfilePage = () => {
         setAvatarUrl(res.url);
         toastService.success('Profile photo updated!');
       }
-    } catch {
-      toastService.error('Failed to upload profile picture.');
+    } catch (err) {
+      toastService.error(err?.message || 'Failed to upload profile picture.');
     } finally {
       setUploadingImage(false);
     }
   };
 
   const handleRemovePhoto = () => {
-    setAvatarUrl('https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80');
-    toastService.info('Reset avatar to default placeholder.');
+    setAvatarUrl('');
+    toastService.info('Profile photo cleared.');
   };
 
-  // Add Sport
+  // Add Sport from Admin Sports Catalog
   const handleAddSport = () => {
+    const chosen =
+      sportsCatalog.find((s) => s.id === selectedSportIdToAdd) || sportsCatalog[0];
+    if (!chosen) {
+      toastService.error('No sports found in catalog yet.');
+      return;
+    }
+    if (sportsList.some((s) => s.sportId === chosen.id || s.sport === chosen.name)) {
+      toastService.info(`${chosen.name} is already in your sports list.`);
+      return;
+    }
     const newSport = {
-      id: `sp_${Date.now()}`,
-      sport: 'Basketball 3x3',
+      id: `sp_${chosen.id}_${Date.now()}`,
+      sportId: chosen.id,
+      sport: chosen.name,
+      iconUrl: chosen.iconUrl || chosen.icon,
       skillLevel: 'Intermediate',
-      preferredPosition: 'Point Guard',
-      isPrimary: false,
+      preferredPosition: '',
+      isPrimary: sportsList.length === 0,
     };
     setSportsList((prev) => [...prev, newSport]);
-    toastService.success('Added new sport category.');
+    toastService.success(`Added ${chosen.name}.`);
   };
 
   // Remove Sport
   const handleRemoveSport = (id) => {
-    setSportsList((prev) => prev.filter((s) => s.id !== id));
+    setSportsList((prev) => {
+      const next = prev.filter((s) => s.id !== id);
+      if (next.length > 0 && !next.some((s) => s.isPrimary)) {
+        next[0] = { ...next[0], isPrimary: true };
+      }
+      return next;
+    });
+  };
+
+  const handleSetPrimarySport = (id) => {
+    setSportsList((prev) => prev.map((s) => ({ ...s, isPrimary: s.id === id })));
   };
 
   // Update Sport Item
@@ -156,24 +200,38 @@ export const PlayerEditProfilePage = () => {
   const onSubmit = async (formData) => {
     setSaving(true);
     try {
+      const orderedSports = [...sportsList].sort((a, b) => Number(Boolean(b.isPrimary)) - Number(Boolean(a.isPrimary)));
+      const primarySport = orderedSports[0];
       const payload = {
-        ...formData,
-        avatar: avatarUrl,
-        sportsPreferences: sportsList,
-        weeklyAvailability: availability,
-        privacy,
+        fullName: formData.name,
+        phoneNumber: formData.phoneNumber,
+        city: formData.city || 'Dhaka',
+        area: formData.area,
+        bio: formData.bio,
+        primarySkillLevel: primarySport?.skillLevel || undefined,
+        sportsPreferences: orderedSports.map((sp) => ({
+          sportId: sp.sportId,
+          skillLevel: sp.skillLevel,
+          preferredPosition: sp.preferredPosition || sp.preferredFormat || '',
+        })),
       };
+      if (avatarUrl && !avatarUrl.startsWith('blob:')) {
+        payload.profileImageUrl = avatarUrl;
+      }
 
       const res = await profileService.updatePlayerProfile(payload);
       if (res?.success) {
+        if (res.data) {
+          updateUserState(res.data);
+        }
         setShowSuccessBanner(true);
         toastService.success('Profile preferences successfully saved!');
         setTimeout(() => {
           navigate(ROUTES.PLAYER_PROFILE);
         }, 800);
       }
-    } catch {
-      toastService.error('Failed to save profile changes.');
+    } catch (err) {
+      toastService.error(err?.message || 'Failed to save profile changes.');
     } finally {
       setSaving(false);
     }
@@ -233,11 +291,17 @@ export const PlayerEditProfilePage = () => {
           {/* Avatar Photo Row */}
           <div className="flex flex-wrap items-center gap-5">
             <div className="relative">
-              <img
-                src={avatarUrl}
-                alt="Profile avatar"
-                className="w-20 h-20 rounded-full object-cover border-2 border-primary ring-4 ring-primary/10"
-              />
+              {avatarUrl ? (
+                <img
+                  src={avatarUrl}
+                  alt="Profile avatar"
+                  className="w-20 h-20 rounded-full object-cover border-2 border-primary ring-4 ring-primary/10"
+                />
+              ) : (
+                <div className="w-20 h-20 rounded-full bg-primary/15 text-primary border-2 border-primary ring-4 ring-primary/10 flex items-center justify-center font-headline text-2xl font-bold uppercase">
+                  A
+                </div>
+              )}
               {uploadingImage && (
                 <div className="absolute inset-0 bg-dark-background/60 rounded-full flex items-center justify-center">
                   <span className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
@@ -291,20 +355,59 @@ export const PlayerEditProfilePage = () => {
             </label>
 
             <label className="flex flex-col gap-1.5">
-              <span className="font-label text-label-md font-semibold">General Area (Public)</span>
+              <span className="font-label text-label-md font-semibold flex items-center gap-1.5">
+                <FontAwesomeIcon icon={faPhone} className="text-primary text-xs" />
+                <span>Phone Number (Bangladesh)</span>
+              </span>
+              <input
+                type="tel"
+                {...register('phoneNumber')}
+                placeholder="+8801711000000"
+                className="w-full px-3.5 py-2.5 rounded-md bg-light-background dark:bg-dark-background border border-light-border dark:border-dark-border font-body text-body-md focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none"
+              />
+              <span className="font-body text-body-sm text-light-muted dark:text-dark-muted">
+                Used for organizer contact and match coordination.
+              </span>
+            </label>
+
+            <label className="flex flex-col gap-1.5">
+              <span className="font-label text-label-md font-semibold">Division / City</span>
+              <select
+                {...register('city')}
+                onChange={(e) => {
+                  const chosenCity = e.target.value;
+                  setValue('city', chosenCity);
+                  const firstArea = zones.find((z) => z.city === chosenCity);
+                  if (firstArea) setValue('area', firstArea.area);
+                }}
+                className="w-full px-3.5 py-2.5 rounded-md bg-light-background dark:bg-dark-background border border-light-border dark:border-dark-border font-body text-body-md focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none"
+              >
+                {Array.from(new Set(['Dhaka', 'Chattogram', 'Sylhet', 'Rajshahi', 'Khulna', 'Barishal', 'Rangpur', 'Mymensingh', ...zones.map((z) => z.city)])).map((cityName) => (
+                  <option key={cityName} value={cityName}>{cityName}</option>
+                ))}
+              </select>
+            </label>
+
+            <label className="flex flex-col gap-1.5">
+              <span className="font-label text-label-md font-semibold">Zone / General Area</span>
               <select
                 {...register('area')}
                 className="w-full px-3.5 py-2.5 rounded-md bg-light-background dark:bg-dark-background border border-light-border dark:border-dark-border font-body text-body-md focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none"
               >
-                <option value="Banani / Gulshan, Dhaka North">Banani / Gulshan, Dhaka North</option>
-                <option value="Mirpur, Dhaka North">Mirpur, Dhaka North</option>
-                <option value="Uttara, Dhaka North">Uttara, Dhaka North</option>
-                <option value="Dhanmondi, Dhaka South">Dhanmondi, Dhaka South</option>
-                <option value="Gazipur Sadar">Gazipur Sadar</option>
-                <option value="Chattogram Metro">Chattogram Metro</option>
+                <option value="">Select Zone / Area</option>
+                {zones
+                  .filter((z) => !watch('city') || z.city === watch('city') || z.division === watch('city'))
+                  .map((z) => (
+                    <option key={z.id} value={z.area}>
+                      {z.area} ({z.city})
+                    </option>
+                  ))}
+                {watch('area') && !zones.some((z) => z.area === watch('area')) && (
+                  <option value={watch('area')}>{watch('area')}</option>
+                )}
               </select>
               <span className="font-body text-body-sm text-light-muted dark:text-dark-muted">
-                Only your general neighborhood is shown—never your street address.
+                All Bangladesh divisions and Admin-configured zones are supported.
               </span>
             </label>
           </div>
@@ -320,50 +423,78 @@ export const PlayerEditProfilePage = () => {
           </label>
         </section>
 
-        {/* Section 2: Sports, Positions & Skill Levels (Lines 312-386) */}
+        {/* Section 2: Sports, Positions & Skill Levels */}
         <section className="rounded-lg bg-light-surface dark:bg-dark-surface border border-light-border dark:border-dark-border p-6 flex flex-col gap-5">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <h2 className="font-headline text-title-lg font-bold">Sports, Positions &amp; Skill Levels</h2>
               <p className="font-body text-body-sm text-light-muted dark:text-dark-muted">
-                Helps organizers balance teams and match you to the right lobbies.
+                Pick any sport from the live Khela Hobe catalog to display on your profile.
               </p>
             </div>
-            <button
-              type="button"
-              onClick={handleAddSport}
-              className="shrink-0 self-start sm:self-auto inline-flex items-center gap-1.5 px-3.5 py-2 rounded-md bg-light-surface-elevated dark:bg-dark-surface-elevated border border-light-border dark:border-dark-border font-label text-label-md hover:border-primary transition-colors"
-            >
-              <FontAwesomeIcon icon={faPlus} className="text-primary text-xs" />
-              <span>Add Sport</span>
-            </button>
+            <div className="flex flex-wrap items-center gap-2">
+              <select
+                value={selectedSportIdToAdd}
+                onChange={(e) => setSelectedSportIdToAdd(e.target.value)}
+                className="px-3 py-2 rounded-md bg-light-background dark:bg-dark-background border border-light-border dark:border-dark-border font-body text-body-sm focus:border-primary focus:outline-none"
+              >
+                {sportsCatalog.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={handleAddSport}
+                className="shrink-0 inline-flex items-center gap-1.5 px-3.5 py-2 rounded-md bg-light-surface-elevated dark:bg-dark-surface-elevated border border-light-border dark:border-dark-border font-label text-label-md hover:border-primary transition-colors"
+              >
+                <FontAwesomeIcon icon={faPlus} className="text-primary text-xs" />
+                <span>Add Sport</span>
+              </button>
+            </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {sportsList.map((sp) => (
-              <div
-                key={sp.id}
-                className="rounded-md bg-light-background dark:bg-dark-background border border-light-border dark:border-dark-border p-4 flex flex-col gap-3 shadow-xs"
-              >
-                <div className="flex items-center justify-between">
-                  <span className="font-headline text-title-md font-semibold truncate">
-                    {sp.sport}
-                  </span>
-                  {sp.isPrimary ? (
-                    <span className="px-2 py-0.5 rounded-full bg-light-surface-elevated dark:bg-dark-surface-elevated text-primary font-label text-label-sm font-semibold">
-                      Primary
+          {sportsList.length === 0 ? (
+            <div className="p-6 rounded-md border border-dashed border-light-border dark:border-dark-border text-center font-body text-sm text-light-muted dark:text-dark-muted">
+              No sports added yet. Select a sport above and click <strong>Add Sport</strong>.
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {sportsList.map((sp) => (
+                <div
+                  key={sp.id}
+                  className="rounded-md bg-light-background dark:bg-dark-background border border-light-border dark:border-dark-border p-4 flex flex-col gap-3 shadow-xs"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-headline text-title-md font-semibold truncate">
+                      {sp.sport}
                     </span>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveSport(sp.id)}
-                      className="text-light-muted dark:text-dark-muted hover:text-error transition-colors p-1"
-                      aria-label={`Remove ${sp.sport}`}
-                    >
-                      <FontAwesomeIcon icon={faXmark} className="text-sm" />
-                    </button>
-                  )}
-                </div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {sp.isPrimary ? (
+                        <span className="px-2 py-0.5 rounded-full bg-light-surface-elevated dark:bg-dark-surface-elevated text-primary font-label text-label-sm font-semibold">
+                          Primary
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => handleSetPrimarySport(sp.id)}
+                          title="Set as primary sport"
+                          className="text-light-muted dark:text-dark-muted hover:text-primary transition-colors p-1 text-xs"
+                        >
+                          <FontAwesomeIcon icon={faStar} />
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveSport(sp.id)}
+                        className="text-light-muted dark:text-dark-muted hover:text-error transition-colors p-1"
+                        aria-label={`Remove ${sp.sport}`}
+                      >
+                        <FontAwesomeIcon icon={faXmark} className="text-sm" />
+                      </button>
+                    </div>
+                  </div>
 
                 <label className="flex flex-col gap-1">
                   <span className="font-label text-label-sm text-light-muted dark:text-dark-muted font-medium">
@@ -402,7 +533,8 @@ export const PlayerEditProfilePage = () => {
                 </label>
               </div>
             ))}
-          </div>
+            </div>
+          )}
         </section>
 
         {/* Section 3: Availability & Privacy (Lines 388-427) */}
@@ -485,7 +617,7 @@ export const PlayerEditProfilePage = () => {
           </div>
         </section>
 
-        {/* Action Buttons (Lines 429-436) */}
+        {/* Action Buttons */}
         <div className="flex items-center justify-end gap-3 pt-2">
           <Link
             to={ROUTES.PLAYER_PROFILE}
@@ -503,6 +635,9 @@ export const PlayerEditProfilePage = () => {
           </button>
         </div>
       </form>
+
+      {/* Connected Accounts */}
+      <GoogleAccountCard />
     </div>
   );
 };

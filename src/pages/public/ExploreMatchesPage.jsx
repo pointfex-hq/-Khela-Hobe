@@ -7,15 +7,11 @@ import {
   faRotateRight,
   faMapLocationDot,
   faTableCellsLarge,
-  faClock,
-  faUsers,
-  faTrophy,
-  faArrowRight,
-  faFutbol,
-  faTableTennisPaddleBall,
-  faBasketball,
+  faLocationCrosshairs,
 } from '@fortawesome/free-solid-svg-icons';
 import { matchService } from '../../services/endpoints/matchService';
+import { useAppStore } from '../../store/useAppStore';
+import { haversineDistanceKm } from '../../utils/formatters';
 import { ROUTES } from '../../constants/routes';
 import MapView from '../../components/common/MapView';
 import Button from '../../components/common/Button';
@@ -25,54 +21,148 @@ export const ExploreMatchesPage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const initialSearch = searchParams.get('search') || '';
 
-  // Filter states
+  // Filter states (applied client-side on cached Zustand matches without hitting DB)
   const [searchQuery, setSearchQuery] = useState(initialSearch);
   const [selectedSport, setSelectedSport] = useState('All Sports');
   const [selectedLocation, setSelectedLocation] = useState('All Bangladesh');
   const [selectedDate, setSelectedDate] = useState('');
   const [selectedSkill, setSelectedSkill] = useState('Any Level');
   const [selectedAvailability, setSelectedAvailability] = useState('Open Slots Only');
-  const [selectedSort, setSelectedSort] = useState('Earliest');
+  const [selectedSort, setSelectedSort] = useState('Nearest');
 
   // View mode: 'grid' or 'map'
   const [viewMode, setViewMode] = useState('grid');
+  const [showMobileFilters, setShowMobileFilters] = useState(false);
 
-  const [matches, setMatches] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const activeFiltersCount = [
+    selectedSport !== 'All Sports',
+    selectedLocation !== 'All Bangladesh',
+    Boolean(selectedDate),
+    selectedSkill !== 'Any Level',
+    selectedAvailability !== 'Open Slots Only',
+  ].filter(Boolean).length;
+
+  const rawMatches = useAppStore((s) => s.matches);
+  const loading = useAppStore((s) => s.matchesLoading);
+  const fetchMatches = useAppStore((s) => s.fetchMatches);
+  const sportsCatalog = useAppStore((s) => s.sports);
+  const fetchSports = useAppStore((s) => s.fetchSports);
+  const zonesCatalog = useAppStore((s) => s.zones);
+  const fetchLocations = useAppStore((s) => s.fetchLocations);
+  const userLocation = useAppStore((s) => s.userLocation);
+  const detectUserLocation = useAppStore((s) => s.detectUserLocation);
 
   // Pagination
   const [page, setPage] = useState(1);
   const itemsPerPage = 6;
 
+  // Sync search input when navigated from DashboardLayout top search bar
   useEffect(() => {
-    const fetchMatches = async () => {
-      setLoading(true);
-      try {
-        const res = await matchService.getMatches({
-          search: searchQuery,
-          sport: selectedSport,
-          location: selectedLocation,
-          date: selectedDate,
-          skillLevel: selectedSkill,
-          availability: selectedAvailability,
-          sort: selectedSort,
-        });
-        setMatches(res.data || []);
-      } catch (err) {
-        console.error('Failed to query matches', err);
-      } finally {
-        setLoading(false);
-      }
-    };
+    const paramQ = searchParams.get('search') || '';
+    if (paramQ !== searchQuery) {
+      setSearchQuery(paramQ);
+    }
+  }, [searchParams]);
 
+  // Fetch cached matches, sports, and Bangladesh zones once on mount + detect user GPS area
+  useEffect(() => {
     fetchMatches();
+    fetchSports();
+    fetchLocations();
+    detectUserLocation();
+  }, [fetchMatches, fetchSports, fetchLocations, detectUserLocation]);
+
+  // Client-side filter & sort over already-fetched Zustand match pool (no DB queries on search/sort)
+  const matches = useMemo(() => {
+    const enriched = (rawMatches || [])
+      .filter((m) => m.state !== 'cancelled' && m.status !== 'CANCELLED')
+      .map((m) => {
+        const dist =
+          userLocation?.lat && userLocation?.lng
+            ? haversineDistanceKm(
+                userLocation.lat,
+                userLocation.lng,
+                m.coordinates?.lat,
+                m.coordinates?.lng
+              )
+            : null;
+        return { ...m, distanceKm: dist };
+      });
+
+    let results = enriched;
+
+    if (selectedSport && selectedSport !== 'All Sports') {
+      const sportLower = selectedSport.toLowerCase();
+      results = results.filter(
+        (m) =>
+          m.sport?.toLowerCase().includes(sportLower) ||
+          m.sportCategory?.toLowerCase().includes(sportLower)
+      );
+    }
+
+    if (selectedLocation && selectedLocation !== 'All Bangladesh') {
+      const loc = selectedLocation.toLowerCase();
+      results = results.filter(
+        (m) =>
+          m.area?.toLowerCase().includes(loc) ||
+          m.city?.toLowerCase().includes(loc) ||
+          m.venue?.toLowerCase().includes(loc)
+      );
+    }
+
+    if (selectedDate) {
+      results = results.filter((m) => m.date === selectedDate);
+    }
+
+    if (selectedSkill && selectedSkill !== 'Any Level') {
+      results = results.filter(
+        (m) => m.skillLevel?.toLowerCase() === selectedSkill.toLowerCase()
+      );
+    }
+
+    if (selectedAvailability === 'Open Slots Only') {
+      results = results.filter((m) => m.totalSlots > m.filledSlots && m.joinMode !== 'Match Full');
+    }
+
+    if (searchQuery.trim()) {
+      const q = searchQuery.trim().toLowerCase();
+      results = results.filter(
+        (m) =>
+          m.title?.toLowerCase().includes(q) ||
+          m.venue?.toLowerCase().includes(q) ||
+          m.area?.toLowerCase().includes(q) ||
+          m.city?.toLowerCase().includes(q) ||
+          m.sport?.toLowerCase().includes(q) ||
+          m.organizer?.name?.toLowerCase().includes(q)
+      );
+    }
+
+    const sorted = [...results];
+    if (selectedSort === 'Nearest') {
+      sorted.sort((a, b) => {
+        if (a.distanceKm !== null && b.distanceKm !== null) {
+          return a.distanceKm - b.distanceKm;
+        }
+        return (a.area || '').localeCompare(b.area || '');
+      });
+    } else if (selectedSort === 'Most Slots') {
+      sorted.sort((a, b) => (b.totalSlots - b.filledSlots) - (a.totalSlots - a.filledSlots));
+    } else if (selectedSort === 'Newest') {
+      sorted.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    } else {
+      sorted.sort((a, b) => (a.startTime || 0) - (b.startTime || 0));
+    }
+
+    return sorted;
   }, [
-    searchQuery,
+    rawMatches,
+    userLocation,
     selectedSport,
     selectedLocation,
     selectedDate,
     selectedSkill,
     selectedAvailability,
+    searchQuery,
     selectedSort,
   ]);
 
@@ -83,36 +173,21 @@ export const ExploreMatchesPage = () => {
     setSelectedDate('');
     setSelectedSkill('Any Level');
     setSelectedAvailability('Open Slots Only');
-    setSelectedSort('Earliest');
+    setSelectedSort('Nearest');
     setSearchParams({});
     toast.success('Filters reset to default');
   };
 
   const handleJoinMatch = async (match) => {
     try {
-      const res = await matchService.joinMatch(match.id);
-      toast.success(res.message || 'Slot confirmed');
-      // Refresh match list
-      const refreshed = await matchService.getMatches({
-        search: searchQuery,
-        sport: selectedSport,
-        location: selectedLocation,
-        date: selectedDate,
-        skillLevel: selectedSkill,
-        availability: selectedAvailability,
-        sort: selectedSort,
+      const res = await matchService.joinMatch(match.id, {
+        mode: match.mode,
+        isApprovalRequired: match.joinMode === 'Approval Required',
       });
-      setMatches(refreshed.data || []);
-    } catch {
-      toast.error('Failed to complete match action');
+      toast.success(res.message || 'Slot confirmed');
+    } catch (err) {
+      toast.error(err?.message || 'Failed to complete match action');
     }
-  };
-
-  const getSportIcon = (sport = '') => {
-    const s = sport.toLowerCase();
-    if (s.includes('badminton')) return faTableTennisPaddleBall;
-    if (s.includes('basketball')) return faBasketball;
-    return faFutbol;
   };
 
   const paginatedMatches = useMemo(() => {
@@ -121,18 +196,36 @@ export const ExploreMatchesPage = () => {
 
   return (
     <div className="flex flex-col gap-6">
-      {/* Page Title & View Switcher Bar (Matches Reference lines 303-322) */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      {/* Page Title & View Switcher Bar */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4">
         <div>
-          <h1 className="font-headline text-headline-lg font-bold text-light-on-background dark:text-dark-on-background tracking-tight">
+          <h1 className="font-headline text-2xl sm:text-headline-lg font-bold text-light-on-background dark:text-dark-on-background tracking-tight">
             Explore Matches
           </h1>
-          <p className="font-body text-body-md text-light-muted dark:text-dark-muted mt-1 tabular-nums">
-            Showing {matches.length} active match{matches.length === 1 ? '' : 'es'} across Dhaka, Gazipur &amp; Chattogram
+          <p className="font-body text-xs sm:text-body-md text-light-muted dark:text-dark-muted mt-1 tabular-nums">
+            Showing {matches.length} active match{matches.length === 1 ? '' : 'es'}
+            {userLocation ? ' • Sorted nearest your location first' : ''}
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+          <button
+            type="button"
+            onClick={async () => {
+              const loc = await detectUserLocation({ force: true });
+              if (loc) {
+                setSelectedSort('Nearest');
+                toast.success('Location updated — showing nearest matches first');
+              } else {
+                toast.error('Unable to access browser location');
+              }
+            }}
+            className="inline-flex items-center justify-center gap-1.5 px-3 py-2 min-h-[38px] rounded-md bg-light-surface dark:bg-dark-surface text-light-on-surface dark:text-dark-on-surface border border-light-border dark:border-dark-border font-label text-xs font-semibold hover:border-primary transition-colors"
+          >
+            <FontAwesomeIcon icon={faLocationCrosshairs} className="text-primary" />
+            <span>{userLocation ? 'Near Me' : 'Use Location'}</span>
+          </button>
+
           {/* Grid vs Map Toggle */}
           <div className="p-1 rounded-md bg-light-surface dark:bg-dark-surface border border-light-border dark:border-dark-border flex items-center gap-1">
             <button
@@ -159,42 +252,83 @@ export const ExploreMatchesPage = () => {
               }`}
             >
               <FontAwesomeIcon icon={faMapLocationDot} className="text-xs" />
-              <span>Map View</span>
+              <span>Map</span>
             </button>
           </div>
 
           {/* Sort Selector */}
-          <label className="flex items-center gap-2">
-            <span className="font-label text-label-md text-light-muted dark:text-dark-muted">Sort:</span>
+          <label className="flex items-center gap-1.5 flex-1 sm:flex-initial min-w-[140px]">
+            <span className="font-label text-xs text-light-muted dark:text-dark-muted hidden sm:inline">Sort:</span>
             <select
               value={selectedSort}
               onChange={(e) => setSelectedSort(e.target.value)}
-              className="px-3 py-2 rounded-md bg-light-surface dark:bg-dark-surface border border-light-border dark:border-dark-border text-light-on-surface dark:text-dark-on-surface font-label text-label-md focus:outline-none focus:ring-2 focus:ring-primary"
+              className="w-full sm:w-auto px-3 py-2 rounded-md bg-light-surface dark:bg-dark-surface border border-light-border dark:border-dark-border text-light-on-surface dark:text-dark-on-surface font-label text-xs sm:text-label-md focus:outline-none focus:ring-2 focus:ring-primary"
             >
+              <option value="Nearest">Nearest First</option>
               <option value="Earliest">Earliest</option>
-              <option value="Nearest">Nearest</option>
               <option value="Newest">Newest</option>
               <option value="Most Slots">Most Slots</option>
             </select>
           </label>
 
+          {/* Refresh from server */}
+          <button
+            type="button"
+            onClick={() => fetchMatches({ force: true })}
+            disabled={loading}
+            aria-label="Sync matches"
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md bg-light-surface dark:bg-dark-surface text-light-on-surface dark:text-dark-on-surface border border-light-border dark:border-dark-border font-label text-xs sm:text-label-md hover:border-primary transition-colors disabled:opacity-50"
+          >
+            <FontAwesomeIcon icon={faRotateRight} className={`text-xs text-primary ${loading ? 'animate-spin' : ''}`} />
+            <span className="hidden xs:inline sm:inline">Sync</span>
+          </button>
+
           {/* Reset Filters */}
           <button
             type="button"
             onClick={handleResetFilters}
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md bg-light-surface dark:bg-dark-surface text-light-on-surface dark:text-dark-on-surface border border-light-border dark:border-dark-border font-label text-label-md hover:bg-light-surface-elevated dark:hover:bg-dark-surface-elevated transition-colors"
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md bg-light-surface dark:bg-dark-surface text-light-on-surface dark:text-dark-on-surface border border-light-border dark:border-dark-border font-label text-xs sm:text-label-md hover:bg-light-surface-elevated dark:hover:bg-dark-surface-elevated transition-colors"
           >
-            <FontAwesomeIcon icon={faRotateRight} className="text-xs text-primary" />
             <span>Reset</span>
           </button>
         </div>
       </div>
 
-      {/* Filter Bar (Reference lines 324-370) */}
+      {/* Instant Client-Side Search Bar + Collapsible Mobile Filters */}
       <section
         aria-label="Match discovery filters"
-        className="rounded-lg bg-light-surface dark:bg-dark-surface border border-light-border dark:border-dark-border p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 shadow-sm"
+        className="rounded-lg bg-light-surface dark:bg-dark-surface border border-light-border dark:border-dark-border p-3.5 sm:p-4 flex flex-col gap-3 shadow-sm"
       >
+        <div className="flex items-center gap-2">
+          <div className="relative flex-1 flex items-center">
+            <FontAwesomeIcon
+              icon={faMagnifyingGlass}
+              className="absolute left-3.5 text-light-muted dark:text-dark-muted text-xs pointer-events-none"
+            />
+            <input
+              type="search"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search matches by title, venue, area, sport..."
+              className="w-full pl-9 pr-3 py-2 rounded-md bg-light-background dark:bg-dark-background border border-light-border dark:border-dark-border text-light-on-background dark:text-dark-on-background font-body text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+            />
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setShowMobileFilters((prev) => !prev)}
+            className={`lg:hidden inline-flex items-center gap-1.5 px-3 py-2 rounded-md border font-label text-xs font-semibold shrink-0 transition-colors ${
+              showMobileFilters || activeFiltersCount > 0
+                ? 'bg-primary/15 border-primary text-primary'
+                : 'bg-light-background dark:bg-dark-background border-light-border dark:border-dark-border text-light-on-surface dark:text-dark-on-surface'
+            }`}
+          >
+            <FontAwesomeIcon icon={faFilter} className="text-[11px]" />
+            <span>Filters{activeFiltersCount > 0 ? ` (${activeFiltersCount})` : ''}</span>
+          </button>
+        </div>
+
+        <div className={`${showMobileFilters ? 'grid' : 'hidden'} lg:grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 pt-1 lg:pt-0`}>
         {/* Sport */}
         <label className="flex flex-col gap-1">
           <span className="font-label text-label-sm text-light-muted dark:text-dark-muted font-medium">
@@ -206,10 +340,20 @@ export const ExploreMatchesPage = () => {
             className="w-full px-3 py-2 rounded-md bg-light-background dark:bg-dark-background border border-light-border dark:border-dark-border text-light-on-background dark:text-dark-on-background font-body text-body-md focus:outline-none focus:ring-2 focus:ring-primary"
           >
             <option value="All Sports">All Sports</option>
-            <option value="Football">Football 7v7</option>
-            <option value="Badminton">Badminton</option>
-            <option value="Cricket">Cricket</option>
-            <option value="Basketball">Basketball</option>
+            {sportsCatalog.length > 0 ? (
+              sportsCatalog.map((sp) => (
+                <option key={sp.id} value={sp.name}>
+                  {sp.name}
+                </option>
+              ))
+            ) : (
+              <>
+                <option value="Football">Football 7v7</option>
+                <option value="Badminton">Badminton</option>
+                <option value="Cricket">Cricket</option>
+                <option value="Basketball">Basketball</option>
+              </>
+            )}
           </select>
         </label>
 
@@ -224,13 +368,21 @@ export const ExploreMatchesPage = () => {
             className="w-full px-3 py-2 rounded-md bg-light-background dark:bg-dark-background border border-light-border dark:border-dark-border text-light-on-background dark:text-dark-on-background font-body text-body-md focus:outline-none focus:ring-2 focus:ring-primary"
           >
             <option value="All Bangladesh">All Bangladesh</option>
-            <option value="Dhaka North">Dhaka North</option>
-            <option value="Gazipur">Gazipur</option>
-            <option value="Banani">Banani</option>
-            <option value="Uttara">Uttara</option>
-            <option value="Mirpur">Mirpur</option>
-            <option value="Dhanmondi">Dhanmondi</option>
-            <option value="Chattogram">Chattogram</option>
+            {zonesCatalog.length > 0 ? (
+              zonesCatalog.map((z) => (
+                <option key={z.id} value={z.area}>
+                  {z.area} ({z.city})
+                </option>
+              ))
+            ) : (
+              <>
+                <option value="Dhaka">Dhaka</option>
+                <option value="Chattogram">Chattogram</option>
+                <option value="Sylhet">Sylhet</option>
+                <option value="Rajshahi">Rajshahi</option>
+                <option value="Khulna">Khulna</option>
+              </>
+            )}
           </select>
         </label>
 
@@ -278,6 +430,7 @@ export const ExploreMatchesPage = () => {
             <option value="Include Full Matches">Include Full Matches</option>
           </select>
         </label>
+        </div>
       </section>
 
       {/* Main Content: Map or Grid View */}
@@ -337,13 +490,14 @@ export const ExploreMatchesPage = () => {
                         </Link>
                         <p className="font-body text-body-sm text-light-muted dark:text-dark-muted mt-1 tabular-nums">
                           {match.venue} • {match.schedule} • {match.filledSlots} / {match.totalSlots} players • {match.skillLevel}
+                          {match.distanceKm !== null && match.distanceKm !== undefined ? ` • ${match.distanceKm} km away` : ''}
                         </p>
                       </div>
                     </div>
 
                     <footer className="pt-3 border-t border-light-border dark:border-dark-border flex items-center justify-between">
                       <span className="font-body text-body-sm text-light-muted dark:text-dark-muted">
-                        Org: {match.organizer?.name || 'Rafiqul Islam'}
+                        Org: {match.organizer?.name || 'Organizer'}
                       </span>
 
                       {isFull ? (

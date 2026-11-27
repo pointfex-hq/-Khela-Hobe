@@ -14,6 +14,9 @@ import {
   faChevronRight,
   faBolt,
   faTrophy,
+  faEye,
+  faUser,
+  faCompass,
 } from '@fortawesome/free-solid-svg-icons';
 import {
   ResponsiveContainer,
@@ -27,6 +30,8 @@ import {
   Cell,
 } from 'recharts';
 import { adminService } from '../../services/endpoints/adminService';
+import { useAppStore } from '../../store/useAppStore';
+import { ROLES } from '../../constants/roles';
 import { ROUTES } from '../../constants/routes';
 import Badge from '../../components/common/Badge';
 import Button from '../../components/common/Button';
@@ -34,6 +39,7 @@ import LoadingSpinner from '../../components/feedback/LoadingSpinner';
 
 export const AdminDashboardPage = () => {
   const navigate = useNavigate();
+  const setAdminPreviewRole = useAppStore((s) => s.setAdminPreviewRole);
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState(null);
 
@@ -83,7 +89,7 @@ export const AdminDashboardPage = () => {
             <FontAwesomeIcon icon={faShieldHalved} className="text-lg" />
           </div>
           <div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <h1 className="font-headline font-bold text-xl sm:text-2xl text-light-on-background dark:text-dark-on-background">
                 Platform Administration
               </h1>
@@ -97,7 +103,37 @@ export const AdminDashboardPage = () => {
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2.5">
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            icon={faUser}
+            onClick={() => {
+              setAdminPreviewRole(ROLES.PLAYER);
+              navigate(ROUTES.PLAYER_DASHBOARD);
+            }}
+          >
+            Player View
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            icon={faEye}
+            onClick={() => {
+              setAdminPreviewRole(ROLES.ORGANIZER);
+              navigate(ROUTES.ORGANIZER_DASHBOARD);
+            }}
+          >
+            Organizer View
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            icon={faCompass}
+            onClick={() => navigate(ROUTES.EXPLORE_MATCHES)}
+          >
+            Public Explore
+          </Button>
           <Button
             variant="outline"
             size="sm"
@@ -105,6 +141,14 @@ export const AdminDashboardPage = () => {
             onClick={() => navigate(ROUTES.ADMIN_USERS)}
           >
             User Directory
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            icon={faGears}
+            onClick={() => navigate(ROUTES.ADMIN_LOCATIONS)}
+          >
+            Zones &amp; Venues
           </Button>
           <Button
             variant="primary"
@@ -238,7 +282,7 @@ export const AdminDashboardPage = () => {
       {/* Charts Section: Weekly Activity & Recent Moderation Actions */}
       <section className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* Left Col (7 cols): Recharts Weekly Match Activity */}
-        <div className="lg:col-span-7 rounded-lg bg-light-surface dark:bg-dark-surface border border-light-border dark:border-dark-border p-5 sm:p-6 flex flex-col gap-4 shadow-sm">
+        <div className="lg:col-span-7 min-w-0 rounded-lg bg-light-surface dark:bg-dark-surface border border-light-border dark:border-dark-border p-4 sm:p-6 flex flex-col gap-4 shadow-sm">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
             <div>
               <h2 className="font-headline font-bold text-lg sm:text-xl text-light-on-surface dark:text-dark-on-surface">
@@ -316,7 +360,7 @@ export const AdminDashboardPage = () => {
         </div>
 
         {/* Right Col (5 cols): Recent Moderation Actions Log */}
-        <div className="lg:col-span-5 rounded-lg bg-light-surface dark:bg-dark-surface border border-light-border dark:border-dark-border p-5 sm:p-6 flex flex-col gap-4 shadow-sm">
+        <div className="lg:col-span-5 min-w-0 rounded-lg bg-light-surface dark:bg-dark-surface border border-light-border dark:border-dark-border p-4 sm:p-6 flex flex-col gap-4 shadow-sm">
           <div className="flex items-center justify-between">
             <h2 className="font-headline font-bold text-lg text-light-on-surface dark:text-dark-on-surface">
               Recent Moderation Actions
@@ -350,6 +394,24 @@ export const AdminDashboardPage = () => {
 
           {/* Quick Shortcuts */}
           <div className="grid grid-cols-2 gap-2 pt-2 border-t border-light-border dark:border-dark-border">
+            <Button
+              variant="outline"
+              size="sm"
+              icon={faTrophy}
+              onClick={() => navigate(ROUTES.ADMIN_TOURNAMENTS)}
+              className="w-full text-xs"
+            >
+              Tournaments Console
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              icon={faFlag}
+              onClick={() => navigate(ROUTES.ADMIN_AUDIT_LOGS)}
+              className="w-full text-xs"
+            >
+              Audit Logs
+            </Button>
             <Button
               variant="outline"
               size="sm"

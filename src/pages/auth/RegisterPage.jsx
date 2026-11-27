@@ -16,6 +16,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { ROLES, ROLE_HOME_ROUTES } from '../../constants/roles';
 import { ROUTES } from '../../constants/routes';
 import Button from '../../components/common/Button';
+import GoogleSignInButton from '../../components/auth/GoogleSignInButton';
 
 export const RegisterPage = () => {
   const [showPassword, setShowPassword] = useState(false);
@@ -70,9 +71,9 @@ export const RegisterPage = () => {
     }
 
     const payload = {
-      name: data.name,
+      fullName: data.name,
       email: data.email,
-      phone: data.phone,
+      phoneNumber: data.phone,
       dateOfBirth: data.dateOfBirth,
       password: data.password,
       role: selectedRole,
@@ -81,8 +82,15 @@ export const RegisterPage = () => {
     const result = await registerAuth(payload);
 
     if (result.success) {
-      const destination = ROLE_HOME_ROUTES[selectedRole] || ROUTES.PLAYER_DASHBOARD;
-      navigate(destination, { replace: true });
+      if (result.user) {
+        const destination = ROLE_HOME_ROUTES[result.user.role || selectedRole] || ROUTES.PLAYER_DASHBOARD;
+        navigate(destination, { replace: true });
+      } else {
+        navigate(ROUTES.LOGIN, {
+          replace: true,
+          state: { message: 'Registration successful. Please login.' },
+        });
+      }
     } else {
       setRegError(result.error || 'Failed to complete registration. Please try again.');
     }
@@ -92,20 +100,14 @@ export const RegisterPage = () => {
     {
       id: ROLES.PLAYER,
       label: 'Player',
-      desc: 'Join games & discover local turfs',
+      desc: 'Join games & enable Parental Control anytime',
       icon: faRunning,
     },
     {
       id: ROLES.ORGANIZER,
       label: 'Organizer',
-      desc: 'Host tournaments & manage venues',
+      desc: 'Host matches & tournaments (Admin verified)',
       icon: faTrophy,
-    },
-    {
-      id: ROLES.GUARDIAN,
-      label: 'Guardian',
-      desc: 'Supervise & approve youth sports',
-      icon: faShieldHalved,
     },
   ];
 
@@ -135,9 +137,9 @@ export const RegisterPage = () => {
           {/* Role Selection Tabs */}
           <div className="flex flex-col gap-1.5">
             <span className="font-label text-label-md font-medium text-light-on-surface dark:text-dark-on-surface">
-              Select Your Role
+              Select Account Type
             </span>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
               {roleOptions.map((opt) => {
                 const isSelected = selectedRole === opt.id;
                 return (
@@ -174,6 +176,11 @@ export const RegisterPage = () => {
                 );
               })}
             </div>
+            {selectedRole === ROLES.ORGANIZER && (
+              <p className="text-[11px] font-body text-warning mt-1">
+                Organizer accounts require Admin approval before creating matches or tournaments. You can browse Organizer tools immediately after signing up.
+              </p>
+            )}
           </div>
 
           {/* Full Name */}
@@ -416,6 +423,16 @@ export const RegisterPage = () => {
             Create Account
           </Button>
         </form>
+
+        <div className="relative flex items-center justify-center">
+          <span className="h-px flex-1 bg-light-border dark:bg-dark-border" />
+          <span className="px-3 text-xs font-label text-light-muted dark:text-dark-muted uppercase">
+            Or
+          </span>
+          <span className="h-px flex-1 bg-light-border dark:bg-dark-border" />
+        </div>
+
+        <GoogleSignInButton label="Continue with Google" role={selectedRole} />
 
         {/* Existing Member Link */}
         <p className="font-body text-body-sm text-light-muted dark:text-dark-muted text-center pt-2 border-t border-light-border dark:border-dark-border">

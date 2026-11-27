@@ -155,11 +155,11 @@ export const LandingPage = () => {
   ];
 
   return (
-    <div className="flex flex-col gap-16 sm:gap-24">
+    <div className="flex flex-col gap-12 sm:gap-20">
       {/* ========================================================================= */}
       {/* 5. HERO SECTION & 6, 7. PRIMARY/SECONDARY CTAS */}
       {/* ========================================================================= */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 pt-8 sm:pt-14 pb-4 grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-12 items-center">
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 pt-5 sm:pt-14 pb-4 grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-center">
         <div className="lg:col-span-7 flex flex-col gap-6">
           {/* Live indicator badge */}
           <div className="inline-flex items-center gap-2.5 self-start px-3.5 py-1.5 rounded-full bg-light-surface dark:bg-dark-surface border border-light-border dark:border-dark-border shadow-sm">
@@ -207,11 +207,11 @@ export const LandingPage = () => {
           </div>
 
           {/* Hero Metrics Strip */}
-          <div className="pt-6 border-t border-light-border dark:border-dark-border grid grid-cols-3 gap-6 max-w-md">
+          <div className="pt-5 sm:pt-6 border-t border-light-border dark:border-dark-border grid grid-cols-3 gap-3 sm:gap-6 max-w-md">
             {heroStats.map((stat, idx) => (
-              <div key={idx} className="flex flex-col gap-1">
+              <div key={idx} className="flex flex-col gap-0.5 sm:gap-1">
                 <span
-                  className={`font-headline text-2xl font-bold tabular-nums ${
+                  className={`font-headline text-xl sm:text-2xl font-bold tabular-nums ${
                     stat.isHighlight
                       ? 'text-primary'
                       : 'text-light-on-background dark:text-dark-on-background'
@@ -219,7 +219,7 @@ export const LandingPage = () => {
                 >
                   {stat.value}
                 </span>
-                <span className="font-body text-xs text-light-muted dark:text-dark-muted">
+                <span className="font-body text-[11px] sm:text-xs text-light-muted dark:text-dark-muted leading-tight">
                   {stat.label}
                 </span>
               </div>
@@ -230,23 +230,23 @@ export const LandingPage = () => {
         {/* Hero Visual Card with Live Badge */}
         <div className="lg:col-span-5">
           <div className="relative rounded-xl overflow-hidden border border-light-border dark:border-dark-border bg-light-surface dark:bg-dark-surface shadow-xl">
-            <div className="relative h-72 sm:h-96 w-full">
+            <div className="relative h-64 sm:h-96 w-full">
               <img
                 src={heroFutsalImg}
                 alt="Players competing on a floodlit artificial turf in Banani Dhaka"
                 className="w-full h-full object-cover"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-dark-background via-transparent to-transparent opacity-80" />
-              <div className="absolute top-4 left-4">
+              <div className="absolute top-3 left-3 sm:top-4 sm:left-4">
                 <Badge variant="primary" size="md" hasDot>
                   Banani Turf Live
                 </Badge>
               </div>
             </div>
 
-            <div className="p-5 bg-light-surface dark:bg-dark-surface border-t border-light-border dark:border-dark-border flex items-center justify-between gap-4">
-              <div className="flex items-center gap-3">
-                <span className="w-10 h-10 rounded-md bg-light-surface-elevated dark:bg-dark-surface-elevated text-primary flex items-center justify-center border border-light-border dark:border-dark-border">
+            <div className="p-4 sm:p-5 bg-light-surface dark:bg-dark-surface border-t border-light-border dark:border-dark-border flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-3 min-w-0">
+                <span className="w-10 h-10 rounded-md bg-light-surface-elevated dark:bg-dark-surface-elevated text-primary flex items-center justify-center border border-light-border dark:border-dark-border shrink-0">
                   <FontAwesomeIcon icon={faBolt} className="text-base" />
                 </span>
                 <div>
@@ -430,7 +430,7 @@ export const LandingPage = () => {
         className="max-w-7xl mx-auto px-4 sm:px-6 grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch"
       >
         {/* How It Works Card */}
-        <div className="lg:col-span-7 rounded-lg bg-light-surface dark:bg-dark-surface border border-light-border dark:border-dark-border p-8 flex flex-col gap-6">
+        <div className="lg:col-span-7 rounded-lg bg-light-surface dark:bg-dark-surface border border-light-border dark:border-dark-border p-5 sm:p-8 flex flex-col gap-6">
           <h2 className="heading-4 font-headline font-bold text-light-on-surface dark:text-dark-on-surface">
             How Khela Hobe Works
           </h2>
@@ -476,7 +476,7 @@ export const LandingPage = () => {
         {/* Safety & Trust Card */}
         <div
           id="safety"
-          className="lg:col-span-5 rounded-lg bg-light-surface dark:bg-dark-surface border border-light-border dark:border-dark-border p-8 flex flex-col justify-between gap-4"
+          className="lg:col-span-5 rounded-lg bg-light-surface dark:bg-dark-surface border border-light-border dark:border-dark-border p-5 sm:p-8 flex flex-col justify-between gap-4"
         >
           <div className="flex flex-col gap-3">
             <div className="flex items-center gap-2 text-primary font-label text-sm font-semibold">
@@ -518,9 +518,9 @@ export const LandingPage = () => {
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 sm:gap-8">
           {/* Player / Community Benefits */}
-          <div className="p-8 rounded-xl bg-light-surface dark:bg-dark-surface border border-light-border dark:border-dark-border flex flex-col gap-6">
+          <div className="p-5 sm:p-8 rounded-xl bg-light-surface dark:bg-dark-surface border border-light-border dark:border-dark-border flex flex-col gap-6">
             <div className="flex items-center gap-3">
               <span className="w-10 h-10 rounded-md bg-primary text-on-primary flex items-center justify-center font-bold">
                 <FontAwesomeIcon icon={faFutbol} className="text-base" />

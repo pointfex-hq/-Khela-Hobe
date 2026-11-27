@@ -31,7 +31,7 @@ export const Modal = ({
     <div
       role="dialog"
       aria-modal="true"
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
     >
       {/* Backdrop */}
       <div
@@ -40,34 +40,34 @@ export const Modal = ({
         aria-hidden="true"
       />
 
-      {/* Surface Dialog */}
+      {/* Surface Dialog (Bottom sheet on phones, centered modal on >=sm) */}
       <div
         className={`
-          relative w-full ${maxWidth} rounded-xl
+          relative w-full ${maxWidth} rounded-t-2xl sm:rounded-xl
           bg-light-surface dark:bg-dark-surface
           border border-light-border dark:border-dark-border
           shadow-2xl z-10 overflow-hidden
           transition-all duration-surface-enter ease-out
-          flex flex-col max-h-[90vh]
+          flex flex-col max-h-[92dvh]
         `}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-light-border dark:border-dark-border">
-          <h3 className="font-headline text-lg font-bold text-light-on-surface dark:text-dark-on-surface">
+        <div className="flex items-center justify-between gap-3 px-4 py-3.5 sm:px-6 sm:py-4 border-b border-light-border dark:border-dark-border shrink-0">
+          <h3 className="font-headline text-base sm:text-lg font-bold text-light-on-surface dark:text-dark-on-surface truncate">
             {title}
           </h3>
           <button
             type="button"
             onClick={onClose}
             aria-label="Close dialog"
-            className="w-8 h-8 rounded-md flex items-center justify-center text-light-muted dark:text-dark-muted hover:text-light-on-surface dark:hover:text-dark-on-surface hover:bg-light-surface-elevated dark:hover:bg-dark-surface-elevated transition-colors"
+            className="w-9 h-9 rounded-md flex items-center justify-center text-light-muted dark:text-dark-muted hover:text-light-on-surface dark:hover:text-dark-on-surface hover:bg-light-surface-elevated dark:hover:bg-dark-surface-elevated transition-colors shrink-0"
           >
             <FontAwesomeIcon icon={faXmark} className="text-sm" />
           </button>
         </div>
 
         {/* Content */}
-        <div className="p-6 overflow-y-auto font-body text-sm text-light-on-surface dark:text-dark-on-surface">
+        <div className="p-4 sm:p-6 pb-[max(1.25rem,env(safe-area-inset-bottom,0px))] sm:pb-6 overflow-y-auto font-body text-sm text-light-on-surface dark:text-dark-on-surface">
           {children}
         </div>
       </div>

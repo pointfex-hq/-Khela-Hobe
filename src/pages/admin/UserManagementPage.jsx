@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
   faSearch,
@@ -17,8 +18,10 @@ import {
   faPhone,
   faEnvelope,
   faLocationDot,
+  faTrashCan,
 } from '@fortawesome/free-solid-svg-icons';
 import { userService } from '../../services/endpoints/userService';
+import { adminService } from '../../services/endpoints/adminService';
 import { toastService } from '../../components/feedback/toastService';
 import Button from '../../components/common/Button';
 import Badge from '../../components/common/Badge';
@@ -28,11 +31,18 @@ import Modal from '../../components/modals/Modal';
 import ConfirmationDialog from '../../components/feedback/ConfirmationDialog';
 
 export const UserManagementPage = () => {
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [viewTab, setViewTab] = useState(
+    searchParams.get('tab') === 'approvals' ? 'approvals' : 'all'
+  );
   const [users, setUsers] = useState([]);
+  const [pendingOrganizerCount, setPendingOrganizerCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState('All Roles');
   const [statusFilter, setStatusFilter] = useState('All Statuses');
+  const [approvingId, setApprovingId] = useState(null);
 
   // Confirmation banner
   const [actionNotice, setActionNotice] = useState(null);
@@ -55,9 +65,11 @@ export const UserManagementPage = () => {
         search,
         role: roleFilter,
         status: statusFilter,
+        approvalStatus: viewTab === 'approvals' ? 'PENDING' : 'ALL',
       });
       if (res.success) {
         setUsers(res.data || []);
+        setPendingOrganizerCount(res.pendingOrganizerCount ?? 0);
       }
     } catch (err) {
       console.error('Failed to load users:', err);
@@ -68,7 +80,23 @@ export const UserManagementPage = () => {
 
   useEffect(() => {
     fetchUsers();
-  }, [roleFilter, statusFilter]);
+  }, [roleFilter, statusFilter, viewTab]);
+
+  const handleOrganizerApproval = async (user, decision) => {
+    setApprovingId(user.id);
+    try {
+      const res = await adminService.approveOrganizer(user.id, decision);
+      toastService.success(res.message);
+      setActionNotice(
+        `${user.name} organizer verification ${decision === 'APPROVED' ? 'APPROVED' : 'REJECTED'}.`
+      );
+      fetchUsers();
+    } catch (err) {
+      toastService.error(err?.message || 'Failed to update organizer verification.');
+    } finally {
+      setApprovingId(null);
+    }
+  };
 
   const handleSearchSubmit = (e) => {
     e.preventDefault();
@@ -88,21 +116,29 @@ export const UserManagementPage = () => {
     const { user, action } = dialogState;
 
     try {
-      const res = await userService.updateUserStatus(user.id, { action });
-      if (res.success) {
-        const actionLabel =
-          action === 'restrict'
-            ? 'Restricted from match hosting'
-            : action === 'suspend'
-            ? 'Account Suspended'
-            : 'Reactivated to Active Status';
-
-        setActionNotice(`${user.name} (${user.id}) updated: ${actionLabel}.`);
+      if (action === 'delete') {
+        const res = await userService.deleteUser(user.id);
+        setActionNotice(`${user.name} (${user.id}) permanently deleted.`);
         toastService.success(res.message);
+        setIsDetailModalOpen(false);
         fetchUsers();
+      } else {
+        const res = await userService.updateUserStatus(user.id, { action });
+        if (res.success) {
+          const actionLabel =
+            action === 'restrict'
+              ? 'Restricted from match hosting'
+              : action === 'suspend'
+              ? 'Account Suspended'
+              : 'Reactivated to Active Status';
+
+          setActionNotice(`${user.name} (${user.id}) updated: ${actionLabel}.`);
+          toastService.success(res.message);
+          fetchUsers();
+        }
       }
-    } catch {
-      toastService.error('Failed to update user status.');
+    } catch (err) {
+      toastService.error(err?.message || 'Failed to update user.');
     } finally {
       setDialogState({ isOpen: false, user: null, action: 'restrict' });
     }
@@ -154,6 +190,43 @@ export const UserManagementPage = () => {
         </div>
       </div>
 
+      {/* Tabs: Directory vs Organizer Approval Requests */}
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onClick={() => {
+            setViewTab('all');
+            setSearchParams({});
+          }}
+          className={`px-4 py-2 rounded-md font-label text-xs font-semibold transition-colors ${
+            viewTab === 'all'
+              ? 'bg-primary text-on-primary'
+              : 'bg-light-surface dark:bg-dark-surface border border-light-border dark:border-dark-border'
+          }`}
+        >
+          All Accounts
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setViewTab('approvals');
+            setSearchParams({ tab: 'approvals' });
+          }}
+          className={`px-4 py-2 rounded-md font-label text-xs font-semibold flex items-center gap-2 transition-colors ${
+            viewTab === 'approvals'
+              ? 'bg-accent text-on-accent'
+              : 'bg-light-surface dark:bg-dark-surface border border-light-border dark:border-dark-border'
+          }`}
+        >
+          <span>Organizer Approval Queue</span>
+          {pendingOrganizerCount > 0 && (
+            <span className="px-1.5 py-0.5 rounded-full bg-dark-background/20 font-mono text-[10px] font-bold">
+              {pendingOrganizerCount}
+            </span>
+          )}
+        </button>
+      </div>
+
       {/* Search Input Bar */}
       <form onSubmit={handleSearchSubmit} className="flex gap-2">
         <div className="relative flex-1">
@@ -200,7 +273,149 @@ export const UserManagementPage = () => {
             <LoadingSpinner size="lg" text="Filtering user directory..." />
           </div>
         ) : users.length > 0 ? (
-          <div className="overflow-x-auto">
+          <>
+            {/* Mobile Card Directory (< md) */}
+            <div className="md:hidden divide-y divide-light-border dark:divide-dark-border">
+              {users.map((u) => {
+                const isActive = u.status === 'Active';
+                const isRestricted = u.status === 'Restricted';
+                const isSuspended = u.status === 'Suspended';
+
+                return (
+                  <div key={`mob-${u.id}`} className="p-4 flex flex-col gap-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-center gap-3 min-w-0">
+                        {u.avatar ? (
+                          <img
+                            src={u.avatar}
+                            alt={u.name}
+                            className="w-10 h-10 rounded-full object-cover shrink-0 border border-light-border dark:border-dark-border"
+                          />
+                        ) : (
+                          <div className="w-10 h-10 rounded-full bg-light-surface-elevated dark:bg-dark-surface-elevated border border-light-border dark:border-dark-border flex items-center justify-center font-label font-bold text-xs text-primary shrink-0">
+                            {u.initials || 'U'}
+                          </div>
+                        )}
+                        <div className="min-w-0">
+                          <button
+                            type="button"
+                            onClick={() => openUserDetails(u)}
+                            className="font-label text-sm font-bold text-light-on-surface dark:text-dark-on-surface hover:text-primary text-left truncate block"
+                          >
+                            {u.name}
+                          </button>
+                          <p className="font-mono text-[11px] text-light-muted dark:text-dark-muted truncate">
+                            {u.roles?.join(', ')} • {u.area}
+                          </p>
+                        </div>
+                      </div>
+
+                      <span
+                        className={`px-2.5 py-0.5 rounded-full font-label text-xs font-semibold shrink-0 ${
+                          isActive
+                            ? 'bg-success text-on-success'
+                            : isRestricted
+                            ? 'bg-warning text-on-warning'
+                            : 'bg-error text-on-error'
+                        }`}
+                      >
+                        {u.status}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-between gap-2 text-xs text-light-muted dark:text-dark-muted">
+                      <span className="font-mono truncate">ID: {u.id}</span>
+                      <span className={u.reportsCount > 0 ? 'text-warning font-bold' : ''}>
+                        {u.reportsCount} report{u.reportsCount === 1 ? '' : 's'}
+                      </span>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => openUserDetails(u)}
+                        className="px-2.5 py-1.5 rounded-md border border-light-border dark:border-dark-border font-label text-xs font-semibold flex items-center gap-1.5"
+                      >
+                        <FontAwesomeIcon icon={faEye} />
+                        <span>View</span>
+                      </button>
+
+                      {u.organizerApprovalStatus === 'PENDING' && (
+                        <>
+                          <button
+                            type="button"
+                            disabled={approvingId === u.id}
+                            onClick={() => handleOrganizerApproval(u, 'APPROVED')}
+                            className="px-2.5 py-1.5 rounded-md bg-primary text-on-primary font-label text-xs font-semibold disabled:opacity-50"
+                          >
+                            Approve Organizer
+                          </button>
+                          <button
+                            type="button"
+                            disabled={approvingId === u.id}
+                            onClick={() => handleOrganizerApproval(u, 'REJECTED')}
+                            className="px-2.5 py-1.5 rounded-md border border-error text-error font-label text-xs font-semibold disabled:opacity-50"
+                          >
+                            Reject
+                          </button>
+                        </>
+                      )}
+
+                      {isActive && (
+                        <button
+                          type="button"
+                          onClick={() => openActionDialog(u, 'restrict')}
+                          className="px-2.5 py-1.5 rounded-md border border-warning text-warning font-label text-xs font-semibold"
+                        >
+                          Restrict
+                        </button>
+                      )}
+
+                      {isRestricted && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => openActionDialog(u, 'suspend')}
+                            className="px-2.5 py-1.5 rounded-md border border-error text-error font-label text-xs font-semibold"
+                          >
+                            Suspend
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => openActionDialog(u, 'reactivate')}
+                            className="px-2.5 py-1.5 rounded-md bg-success text-on-success font-label text-xs font-semibold"
+                          >
+                            Reactivate
+                          </button>
+                        </>
+                      )}
+
+                      {isSuspended && (
+                        <button
+                          type="button"
+                          onClick={() => openActionDialog(u, 'reactivate')}
+                          className="px-2.5 py-1.5 rounded-md bg-success text-on-success font-label text-xs font-semibold"
+                        >
+                          Reactivate
+                        </button>
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={() => openActionDialog(u, 'delete')}
+                        className="px-2.5 py-1.5 rounded-md bg-error/10 border border-error/40 text-error font-label text-xs font-semibold flex items-center gap-1"
+                      >
+                        <FontAwesomeIcon icon={faTrashCan} />
+                        <span>Delete</span>
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Desktop Table (>= md) */}
+            <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="border-b border-light-border dark:border-dark-border bg-light-surface-elevated dark:bg-dark-surface-elevated font-label text-xs uppercase text-light-muted dark:text-dark-muted">
@@ -296,7 +511,28 @@ export const UserManagementPage = () => {
                             <FontAwesomeIcon icon={faEye} />
                           </button>
 
-                          {isActive && (
+                          {u.organizerApprovalStatus === 'PENDING' && (
+                        <>
+                          <button
+                            type="button"
+                            disabled={approvingId === u.id}
+                            onClick={() => handleOrganizerApproval(u, 'APPROVED')}
+                            className="px-2.5 py-1.5 rounded-md bg-primary text-on-primary font-label text-xs font-semibold disabled:opacity-50"
+                          >
+                            Approve Organizer
+                          </button>
+                          <button
+                            type="button"
+                            disabled={approvingId === u.id}
+                            onClick={() => handleOrganizerApproval(u, 'REJECTED')}
+                            className="px-2.5 py-1.5 rounded-md border border-error text-error font-label text-xs font-semibold disabled:opacity-50"
+                          >
+                            Reject
+                          </button>
+                        </>
+                      )}
+
+                      {isActive && (
                             <button
                               type="button"
                               onClick={() => openActionDialog(u, 'restrict')}
@@ -334,6 +570,16 @@ export const UserManagementPage = () => {
                               Reactivate
                             </button>
                           )}
+
+                          <button
+                            type="button"
+                            onClick={() => openActionDialog(u, 'delete')}
+                            title="Delete user permanently"
+                            aria-label={`Delete ${u.name}`}
+                            className="p-1.5 rounded-md text-xs text-error hover:bg-error/10 transition-colors"
+                          >
+                            <FontAwesomeIcon icon={faTrashCan} />
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -341,7 +587,8 @@ export const UserManagementPage = () => {
                 })}
               </tbody>
             </table>
-          </div>
+            </div>
+          </>
         ) : (
           <EmptyState
             icon={faUsers}
@@ -436,7 +683,40 @@ export const UserManagementPage = () => {
               </div>
             )}
 
-            <div className="flex justify-end pt-2">
+            <div className="grid grid-cols-2 gap-2 pt-1">
+              <Button
+                variant="outline"
+                size="sm"
+                icon={faEye}
+                onClick={() => {
+                  setIsDetailModalOpen(false);
+                  navigate(`/players/${selectedUser.id}`);
+                }}
+              >
+                Player Profile View
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                icon={faEye}
+                onClick={() => {
+                  setIsDetailModalOpen(false);
+                  navigate(`/organizers/${selectedUser.id}`);
+                }}
+              >
+                Organizer Profile View
+              </Button>
+            </div>
+
+            <div className="flex items-center justify-between pt-2">
+              <Button
+                variant="danger"
+                size="sm"
+                icon={faTrashCan}
+                onClick={() => openActionDialog(selectedUser, 'delete')}
+              >
+                Delete Account
+              </Button>
               <Button variant="outline" size="sm" onClick={() => setIsDetailModalOpen(false)}>
                 Close
               </Button>
@@ -451,31 +731,35 @@ export const UserManagementPage = () => {
         onClose={() => setDialogState({ isOpen: false, user: null, action: 'restrict' })}
         onConfirm={handleConfirmModeration}
         title={
-          dialogState.action === 'restrict'
+          dialogState.action === 'delete'
+            ? `Permanently Delete ${dialogState.user?.name}?`
+            : dialogState.action === 'restrict'
             ? `Restrict ${dialogState.user?.name}?`
             : dialogState.action === 'suspend'
             ? `Suspend Account: ${dialogState.user?.name}?`
             : `Reactivate ${dialogState.user?.name}?`
         }
         message={
-          dialogState.action === 'restrict'
+          dialogState.action === 'delete'
+            ? `This will permanently delete ${dialogState.user?.name} (${dialogState.user?.email || dialogState.user?.id}) along with their profile, sessions, and hosted matches/tournaments. This cannot be undone.`
+            : dialogState.action === 'restrict'
             ? `Restrict ${dialogState.user?.name} (${dialogState.user?.id}) from creating new quick matches? They can still join existing matches.`
             : dialogState.action === 'suspend'
             ? `Suspend ${dialogState.user?.name} (${dialogState.user?.id}) immediately? The user will be blocked from match participation and chat access.`
             : `Restore ${dialogState.user?.name} (${dialogState.user?.id}) to Active status with full match creation and player privileges?`
         }
         confirmText={
-          dialogState.action === 'restrict'
+          dialogState.action === 'delete'
+            ? 'Permanently Delete User'
+            : dialogState.action === 'restrict'
             ? 'Confirm Restriction'
             : dialogState.action === 'suspend'
             ? 'Confirm Suspension'
             : 'Confirm Reactivation'
         }
         confirmVariant={
-          dialogState.action === 'suspend'
+          dialogState.action === 'suspend' || dialogState.action === 'delete'
             ? 'danger'
-            : dialogState.action === 'restrict'
-            ? 'primary'
             : 'primary'
         }
       />

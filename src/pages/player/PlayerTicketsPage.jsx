@@ -28,6 +28,8 @@ import EmptyState from '../../components/common/EmptyState';
 import LoadingSpinner from '../../components/feedback/LoadingSpinner';
 import Modal from '../../components/modals/Modal';
 import ConfirmationDialog from '../../components/feedback/ConfirmationDialog';
+import QrCodeCanvas from '../../components/common/QrCodeCanvas';
+import { downloadTicketPassPdf } from '../../utils/ticketPdfGenerator';
 
 export const PlayerTicketsPage = () => {
   const navigate = useNavigate();
@@ -62,8 +64,13 @@ export const PlayerTicketsPage = () => {
     fetchTickets();
   }, []);
 
-  const handleDownload = (ticketId) => {
-    toastService.success(`Digital Pass ${ticketId} saved for offline gate presentation.`);
+  const handleDownload = async (ticket) => {
+    try {
+      await downloadTicketPassPdf(ticket);
+      toastService.success(`Offline PDF pass saved for ${ticket?.id || 'your ticket'}.`);
+    } catch {
+      toastService.error('Could not generate PDF pass.');
+    }
   };
 
   const handleOpenDetails = (ticket) => {
@@ -105,16 +112,18 @@ export const PlayerTicketsPage = () => {
   const filteredTickets = tickets.filter((t) => {
     if (activeTab === 'upcoming') return t.status === 'Reserved Pass';
     if (activeTab === 'used') return t.status === 'Checked In' || t.isCheckedIn;
+    if (activeTab === 'expired') return t.status === 'Expired';
     if (activeTab === 'cancelled') return t.status === 'Cancelled';
     return true; // 'all'
   });
 
   const upcomingCount = tickets.filter((t) => t.status === 'Reserved Pass').length;
   const usedCount = tickets.filter((t) => t.status === 'Checked In' || t.isCheckedIn).length;
+  const expiredCount = tickets.filter((t) => t.status === 'Expired').length;
   const cancelledCount = tickets.filter((t) => t.status === 'Cancelled').length;
 
   return (
-    <div className="flex flex-col gap-6 sm:gap-8 max-w-5xl mx-auto pb-16">
+    <div className="flex flex-col gap-6 sm:gap-8 max-w-5xl w-full mx-auto">
       {/* Header Block (Reference lines 208-214 in UIUX/my_tickets/code.html) */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-light-border dark:border-dark-border pb-5">
         <div>
@@ -130,14 +139,14 @@ export const PlayerTicketsPage = () => {
           variant="tertiary"
           size="md"
           icon={faTicket}
-          onClick={() => navigate(ROUTES.EXPLORE_MATCHES)}
+          onClick={() => navigate(ROUTES.TOURNAMENTS)}
         >
-          Browse Events
+          Browse Tournaments
         </Button>
       </div>
 
       {/* Tabs Filter */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-1">
+      <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
         <button
           type="button"
           onClick={() => setActiveTab('upcoming')}
@@ -165,6 +174,21 @@ export const PlayerTicketsPage = () => {
           <span>Used Passes</span>
           <span className="w-5 h-5 rounded-full bg-light-background/20 dark:bg-dark-background/20 flex items-center justify-center text-[10px] tabular-nums font-bold">
             {usedCount}
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('expired')}
+          className={`px-4 py-2 rounded-full font-label text-xs sm:text-sm whitespace-nowrap transition-colors flex items-center gap-1.5 ${
+            activeTab === 'expired'
+              ? 'bg-primary text-on-primary font-bold shadow-sm'
+              : 'bg-light-surface dark:bg-dark-surface border border-light-border dark:border-dark-border text-light-muted dark:text-dark-muted hover:text-light-on-surface dark:hover:text-dark-on-surface'
+          }`}
+        >
+          <span>Expired</span>
+          <span className="w-5 h-5 rounded-full bg-light-background/20 dark:bg-dark-background/20 flex items-center justify-center text-[10px] tabular-nums font-bold">
+            {expiredCount}
           </span>
         </button>
 
@@ -210,7 +234,7 @@ export const PlayerTicketsPage = () => {
             return (
               <article
                 key={ticket.id}
-                className={`rounded-lg bg-light-surface dark:bg-dark-surface border p-6 sm:p-8 grid grid-cols-1 md:grid-cols-12 gap-6 items-center shadow-md transition-all ${
+                className={`rounded-lg bg-light-surface dark:bg-dark-surface border p-4 sm:p-6 grid grid-cols-1 md:grid-cols-12 gap-5 sm:gap-6 items-center shadow-md transition-all ${
                   isUpcoming
                     ? 'border-light-border dark:border-dark-border'
                     : isCancelled
@@ -294,7 +318,7 @@ export const PlayerTicketsPage = () => {
                           variant="outline"
                           size="sm"
                           icon={faDownload}
-                          onClick={() => handleDownload(ticket.id)}
+                          onClick={() => handleDownload(ticket)}
                         >
                           Save Offline Pass
                         </Button>
@@ -313,29 +337,14 @@ export const PlayerTicketsPage = () => {
                   </div>
                 </div>
 
-                {/* Right 4 Columns: QR Code Container (Reference lines 243-247) */}
+                {/* Right 4 Columns: Real Scannable QR Code */}
                 <div className="md:col-span-4 rounded-lg bg-light-background dark:bg-dark-background border border-light-border dark:border-dark-border p-5 flex flex-col items-center justify-center gap-2.5 text-center shadow-inner">
-                  <div className="w-28 h-28 sm:w-32 sm:h-32 p-2 rounded-md bg-white flex items-center justify-center shadow-sm">
-                    <svg viewBox="0 0 100 100" className="w-full h-full text-black" fill="currentColor">
-                      <rect x="0" y="0" width="30" height="30" fill="black" />
-                      <rect x="5" y="5" width="20" height="20" fill="white" />
-                      <rect x="10" y="10" width="10" height="10" fill="black" />
-                      <rect x="70" y="0" width="30" height="30" fill="black" />
-                      <rect x="75" y="5" width="20" height="20" fill="white" />
-                      <rect x="80" y="10" width="10" height="10" fill="black" />
-                      <rect x="0" y="70" width="30" height="30" fill="black" />
-                      <rect x="5" y="75" width="20" height="20" fill="white" />
-                      <rect x="10" y="80" width="10" height="10" fill="black" />
-                      <rect x="40" y="10" width="10" height="10" fill="black" />
-                      <rect x="55" y="10" width="5" height="10" fill="black" />
-                      <rect x="40" y="30" width="20" height="10" fill="black" />
-                      <rect x="70" y="40" width="15" height="15" fill="black" />
-                      <rect x="10" y="45" width="15" height="10" fill="black" />
-                      <rect x="35" y="50" width="10" height="20" fill="black" />
-                      <rect x="55" y="65" width="15" height="10" fill="black" />
-                      <rect x="45" y="75" width="20" height="15" fill="black" />
-                      <rect x="75" y="70" width="20" height="20" fill="black" />
-                    </svg>
+                  <div className="w-32 h-32 p-2 rounded-md bg-white flex items-center justify-center shadow-sm">
+                    <QrCodeCanvas
+                      value={JSON.stringify({ code: ticket.ticketCode || ticket.id, tournamentId: ticket.tournamentId })}
+                      size={112}
+                      alt={`QR Code for ${ticket.id}`}
+                    />
                   </div>
 
                   <p className="font-mono text-xs font-bold text-light-on-background dark:text-dark-on-background tracking-wider">
@@ -397,23 +406,12 @@ export const PlayerTicketsPage = () => {
 
             {/* QR Code */}
             <div className="p-4 rounded-lg bg-light-background dark:bg-dark-background border border-light-border dark:border-dark-border flex flex-col items-center gap-2">
-              <div className="w-32 h-32 bg-white p-2 rounded flex items-center justify-center shadow-sm">
-                <svg viewBox="0 0 100 100" className="w-full h-full text-black" fill="currentColor">
-                  <rect x="0" y="0" width="30" height="30" fill="black" />
-                  <rect x="5" y="5" width="20" height="20" fill="white" />
-                  <rect x="10" y="10" width="10" height="10" fill="black" />
-                  <rect x="70" y="0" width="30" height="30" fill="black" />
-                  <rect x="75" y="5" width="20" height="20" fill="white" />
-                  <rect x="80" y="10" width="10" height="10" fill="black" />
-                  <rect x="0" y="70" width="30" height="30" fill="black" />
-                  <rect x="5" y="75" width="20" height="20" fill="white" />
-                  <rect x="10" y="80" width="10" height="10" fill="black" />
-                  <rect x="40" y="10" width="10" height="10" fill="black" />
-                  <rect x="40" y="30" width="20" height="10" fill="black" />
-                  <rect x="70" y="40" width="15" height="15" fill="black" />
-                  <rect x="35" y="50" width="10" height="20" fill="black" />
-                  <rect x="75" y="70" width="20" height="20" fill="black" />
-                </svg>
+              <div className="w-36 h-36 bg-white p-2 rounded flex items-center justify-center shadow-sm">
+                <QrCodeCanvas
+                  value={JSON.stringify({ code: selectedTicket.ticketCode || selectedTicket.id, tournamentId: selectedTicket.tournamentId })}
+                  size={128}
+                  alt={`QR Code for ${selectedTicket.id}`}
+                />
               </div>
               <span className="font-mono text-sm font-bold text-primary">{selectedTicket.id}</span>
               <span className="text-[11px] text-light-muted dark:text-dark-muted">
@@ -460,10 +458,10 @@ export const PlayerTicketsPage = () => {
                 variant="outline"
                 size="md"
                 className="flex-1"
-                onClick={() => handleDownload(selectedTicket.id)}
+                onClick={() => handleDownload(selectedTicket)}
                 icon={faDownload}
               >
-                Download
+                Download PDF
               </Button>
               <Button
                 variant="primary"

@@ -77,9 +77,6 @@ export const ForgotPasswordPage = () => {
                 We sent a 6-digit verification code to{' '}
                 <span className="font-semibold">{submittedIdentifier}</span>.
               </p>
-              <div className="p-2.5 rounded bg-light-surface dark:bg-dark-surface border border-light-border dark:border-dark-border text-xs font-mono text-center text-primary font-bold tracking-widest mt-1">
-                Demo Code: 123456
-              </div>
             </div>
 
             <Button

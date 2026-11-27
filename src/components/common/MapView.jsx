@@ -19,12 +19,39 @@ import {
   faSliders,
   faShieldHalved,
   faCheck,
+  faExpand,
+  faCompress,
 } from '@fortawesome/free-solid-svg-icons';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { ROUTES } from '../../constants/routes';
 import Button from './Button';
 import { useTheme } from '../../hooks/useTheme';
+import { useAppStore } from '../../store/useAppStore';
+import { haversineDistanceKm } from '../../utils/formatters';
+
+function getSportEmoji(match) {
+  const icon = match?.sportDto?.iconUrl;
+  if (icon && !/^https?:\/\//i.test(icon)) {
+    return icon;
+  }
+  const s = String(match?.sport || match?.sportCategory || '').toLowerCase();
+  if (s.includes('basketball')) return '🏀';
+  if (s.includes('badminton')) return '🏸';
+  if (s.includes('cricket')) return '🏏';
+  if (s.includes('tennis') || s.includes('ping')) return '🏓';
+  if (s.includes('volleyball')) return '🏐';
+  return '⚽';
+}
+
+function getSportMarkerIconHtml(match) {
+  const icon = match?.sportDto?.iconUrl;
+  if (icon && /^https?:\/\//i.test(icon)) {
+    const escaped = icon.replace(/"/g, '&quot;');
+    return `<img src="${escaped}" alt="" style="width:16px;height:16px;border-radius:9999px;object-fit:cover;" />`;
+  }
+  return `<span style="font-size:14px;line-height:1;">${getSportEmoji(match)}</span>`;
+}
 
 /**
  * Standard Dhaka Metro Zones with Exact GPS Coordinates
@@ -60,9 +87,72 @@ export const MapView = ({
   const [mapMode, setMapMode] = useState('original');
   const [selectedZoneId, setSelectedZoneId] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchedArea, setSearchedArea] = useState(null);
   const [customZoom, setCustomZoom] = useState(1);
-  const [userLocation, setUserLocation] = useState(null);
+  const storeUserLocation = useAppStore((s) => s.userLocation);
+  const detectUserLocation = useAppStore((s) => s.detectUserLocation);
+  const storeZones = useAppStore((s) => s.zones);
+  const storeVenues = useAppStore((s) => s.venues);
+  const fetchLocations = useAppStore((s) => s.fetchLocations);
+  const [userLocation, setUserLocation] = useState(storeUserLocation);
   const [isLocating, setIsLocating] = useState(false);
+  const [searchingArea, setSearchingArea] = useState(false);
+  const [isFullScreen, setIsFullScreen] = useState(false);
+
+  useEffect(() => {
+    if (!isFullScreen) return undefined;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const onKeyDown = (ev) => {
+      if (ev.key === 'Escape') setIsFullScreen(false);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, [isFullScreen]);
+
+  useEffect(() => {
+    if (mapMode === 'original' && leafletMapInstanceRef.current) {
+      const t = setTimeout(() => {
+        leafletMapInstanceRef.current?.invalidateSize();
+      }, 160);
+      return () => clearTimeout(t);
+    }
+    return undefined;
+  }, [isFullScreen, mapMode]);
+
+  useEffect(() => {
+    fetchLocations();
+  }, [fetchLocations]);
+
+  useEffect(() => {
+    if (storeUserLocation) {
+      setUserLocation(storeUserLocation);
+    }
+  }, [storeUserLocation]);
+
+  const dynamicZones = useMemo(() => {
+    if (Array.isArray(storeZones) && storeZones.length > 0) {
+      return [
+        { id: 'all', label: 'All Bangladesh', sublabel: 'Nationwide View', lat: 23.8103, lng: 90.4125, zoom: 7, customX: 380, customY: 260 },
+        ...storeZones.map((z) => ({
+          id: z.id,
+          label: z.area,
+          sublabel: `${z.city}, ${z.division}`,
+          city: z.city,
+          division: z.division,
+          lat: z.latitude,
+          lng: z.longitude,
+          zoom: z.zoom || 14,
+          customX: 380,
+          customY: 260,
+        })),
+      ];
+    }
+    return DHAKA_ZONES;
+  }, [storeZones]);
 
   const [currentSelectedId, setCurrentSelectedId] = useState(
     selectedMatchId || (matches[0] ? matches[0].id : null)
@@ -75,30 +165,65 @@ export const MapView = ({
 
   // Selected zone definition
   const currentZone = useMemo(() => {
-    return DHAKA_ZONES.find((z) => z.id === selectedZoneId) || DHAKA_ZONES[0];
-  }, [selectedZoneId]);
+    return dynamicZones.find((z) => z.id === selectedZoneId) || dynamicZones[0];
+  }, [selectedZoneId, dynamicZones]);
 
-  // Filter matches based on search query and zone
+  // Filter and sort matches (nearest to searched area or user location first)
   const filteredMatches = useMemo(() => {
-    return matches.filter((m) => {
-      // Zone filter: if not 'all', match by area
+    const q = searchQuery.toLowerCase().trim();
+    const filtered = matches.filter((m) => {
+      // If user searched an area via Find Area / coordinates, include matches within 20km OR matching text
+      if (searchedArea?.lat && searchedArea?.lng) {
+        const distToArea = haversineDistanceKm(
+          searchedArea.lat,
+          searchedArea.lng,
+          m.coordinates?.lat,
+          m.coordinates?.lng
+        );
+        const matchesText =
+          !q ||
+          m.title?.toLowerCase().includes(q) ||
+          m.venue?.toLowerCase().includes(q) ||
+          m.area?.toLowerCase().includes(q) ||
+          m.city?.toLowerCase().includes(q) ||
+          m.sport?.toLowerCase().includes(q);
+        return matchesText || (distToArea !== null && distToArea <= 20);
+      }
+
+      // Zone filter: if not 'all', match by area, city, or proximity within 10km of zone center
+      const distToZone =
+        selectedZoneId !== 'all' && currentZone?.lat && currentZone?.lng
+          ? haversineDistanceKm(currentZone.lat, currentZone.lng, m.coordinates?.lat, m.coordinates?.lng)
+          : null;
       const matchesZone =
         selectedZoneId === 'all' ||
         (m.area && m.area.toLowerCase().includes(currentZone.label.toLowerCase().split(' ')[0])) ||
-        (m.coordinates?.label && m.coordinates.label.toLowerCase().includes(currentZone.label.toLowerCase().split(' ')[0]));
+        (m.city && currentZone.city && m.city.toLowerCase().includes(currentZone.city.toLowerCase())) ||
+        (distToZone !== null && distToZone <= 10);
 
-      // Text search query filter
-      if (!searchQuery.trim()) return matchesZone;
-      const q = searchQuery.toLowerCase().trim();
+      if (!q) return matchesZone;
       const matchesQuery =
         (m.title && m.title.toLowerCase().includes(q)) ||
         (m.venue && m.venue.toLowerCase().includes(q)) ||
         (m.area && m.area.toLowerCase().includes(q)) ||
+        (m.city && m.city.toLowerCase().includes(q)) ||
         (m.sport && m.sport.toLowerCase().includes(q));
 
       return matchesZone && matchesQuery;
     });
-  }, [matches, selectedZoneId, currentZone, searchQuery]);
+
+    const anchorLat = searchedArea?.lat ?? (selectedZoneId !== 'all' ? currentZone?.lat : userLocation?.lat);
+    const anchorLng = searchedArea?.lng ?? (selectedZoneId !== 'all' ? currentZone?.lng : userLocation?.lng);
+    if (anchorLat && anchorLng) {
+      return [...filtered]
+        .map((m) => ({
+          ...m,
+          _areaDistKm: haversineDistanceKm(anchorLat, anchorLng, m.coordinates?.lat, m.coordinates?.lng),
+        }))
+        .sort((a, b) => (a._areaDistKm ?? 9999) - (b._areaDistKm ?? 9999));
+    }
+    return filtered;
+  }, [matches, selectedZoneId, currentZone, searchQuery, searchedArea, userLocation]);
 
   const selectedMatch = useMemo(() => {
     return (
@@ -127,44 +252,120 @@ export const MapView = ({
   // Switch Zone / Area
   const handleZoneSelect = (zoneId, e) => {
     if (e) e.preventDefault();
+    setSearchedArea(null);
     setSelectedZoneId(zoneId);
-    const targetZone = DHAKA_ZONES.find((z) => z.id === zoneId) || DHAKA_ZONES[0];
+    const targetZone = dynamicZones.find((z) => z.id === zoneId) || dynamicZones[0];
 
     // Fly to zone on Original Map
-    if (mapMode === 'original' && leafletMapInstanceRef.current) {
-      leafletMapInstanceRef.current.flyTo([targetZone.lat, targetZone.lng], targetZone.zoom, {
+    if (mapMode === 'original' && leafletMapInstanceRef.current && targetZone) {
+      leafletMapInstanceRef.current.flyTo([targetZone.lat, targetZone.lng], targetZone.zoom || 13, {
         duration: 1.2,
       });
     }
   };
 
-  // User Geolocation Finder
-  const handleLocateMe = (e) => {
+  // Search area directly on the Leaflet street map (Zones -> Venues -> Nominatim Bangladesh geocode)
+  const handleSearchAreaOnMap = async (e) => {
     if (e) e.preventDefault();
-    if (!navigator.geolocation) {
-      alert('Geolocation is not supported by your browser.');
+    const q = searchQuery.trim();
+    if (!q) {
+      setSearchedArea(null);
       return;
     }
-    setIsLocating(true);
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        setIsLocating(false);
-        const { latitude, longitude } = position.coords;
-        setUserLocation({ lat: latitude, lng: longitude });
 
-        if (mapMode === 'original' && leafletMapInstanceRef.current) {
-          leafletMapInstanceRef.current.flyTo([latitude, longitude], 14, { duration: 1.2 });
-        }
-      },
-      (error) => {
-        setIsLocating(false);
-        // Fallback to Dhaka center
-        if (mapMode === 'original' && leafletMapInstanceRef.current) {
-          leafletMapInstanceRef.current.flyTo([23.8103, 90.4125], 12, { duration: 1.0 });
-        }
-      },
-      { timeout: 8000 }
+    const qLower = q.toLowerCase();
+    const matchedZone = dynamicZones.find(
+      (z) =>
+        z.id !== 'all' &&
+        (z.label?.toLowerCase().includes(qLower) ||
+          z.city?.toLowerCase().includes(qLower) ||
+          z.division?.toLowerCase().includes(qLower))
     );
+    if (matchedZone) {
+      setSelectedZoneId('all');
+      setSearchedArea({ lat: matchedZone.lat, lng: matchedZone.lng, label: matchedZone.label });
+      if (mapMode === 'original' && leafletMapInstanceRef.current) {
+        leafletMapInstanceRef.current.flyTo([matchedZone.lat, matchedZone.lng], matchedZone.zoom || 14, {
+          duration: 1.1,
+        });
+      }
+      return;
+    }
+
+    const matchedVenue = storeVenues.find(
+      (v) =>
+        v.name?.toLowerCase().includes(qLower) ||
+        v.area?.toLowerCase().includes(qLower) ||
+        v.city?.toLowerCase().includes(qLower)
+    );
+    if (matchedVenue) {
+      setSelectedZoneId('all');
+      setSearchedArea({
+        lat: matchedVenue.latitude,
+        lng: matchedVenue.longitude,
+        label: matchedVenue.area || matchedVenue.name,
+      });
+      if (mapMode === 'original' && leafletMapInstanceRef.current) {
+        leafletMapInstanceRef.current.flyTo([matchedVenue.latitude, matchedVenue.longitude], 15, {
+          duration: 1.1,
+        });
+      }
+      return;
+    }
+
+    setSearchingArea(true);
+    try {
+      const resp = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=bd&q=${encodeURIComponent(q)}`
+      );
+      const data = await resp.json();
+      if (Array.isArray(data) && data[0]) {
+        const lat = parseFloat(data[0].lat);
+        const lon = parseFloat(data[0].lon);
+        if (!Number.isNaN(lat) && !Number.isNaN(lon)) {
+          setSelectedZoneId('all');
+          setSearchedArea({ lat, lng: lon, label: q });
+          if (mapMode === 'original' && leafletMapInstanceRef.current) {
+            leafletMapInstanceRef.current.flyTo([lat, lon], 14, { duration: 1.2 });
+          }
+        }
+      }
+    } catch {
+      // Keep local text filter active if offline
+    } finally {
+      setSearchingArea(false);
+    }
+  };
+
+  // Focus / Reset map camera to the currently selected zone
+  const handleFocusSelectedZone = (e) => {
+    if (e) e.preventDefault();
+    setSearchedArea(null);
+    if (mapMode === 'original' && leafletMapInstanceRef.current && currentZone) {
+      leafletMapInstanceRef.current.flyTo(
+        [currentZone.lat, currentZone.lng],
+        currentZone.zoom || 13,
+        { duration: 1.0 }
+      );
+    } else {
+      setCustomZoom(1);
+    }
+  };
+
+  // User Geolocation Finder
+  const handleLocateMe = async (e) => {
+    if (e) e.preventDefault();
+    setIsLocating(true);
+    const coords = await detectUserLocation({ force: true });
+    setIsLocating(false);
+    if (coords) {
+      setUserLocation(coords);
+      if (mapMode === 'original' && leafletMapInstanceRef.current) {
+        leafletMapInstanceRef.current.flyTo([coords.lat, coords.lng], 14, { duration: 1.2 });
+      }
+    } else if (mapMode === 'original' && leafletMapInstanceRef.current) {
+      leafletMapInstanceRef.current.flyTo([23.8103, 90.4125], 12, { duration: 1.0 });
+    }
   };
 
   // Initialize and maintain Leaflet Original Map instance
@@ -181,11 +382,6 @@ export const MapView = ({
         scrollWheelZoom: true,
       });
 
-      // Add Attribution in subtle bottom right
-      L.control.attribution({ position: 'bottomright', prefix: false })
-        .addAttribution('&copy; OpenStreetMap contributors &copy; CARTO')
-        .addTo(map);
-
       leafletMapInstanceRef.current = map;
       markersLayerGroupRef.current = L.layerGroup().addTo(map);
     }
@@ -198,12 +394,16 @@ export const MapView = ({
     }
 
     // High quality street map tiles: Dark Matter for dark mode, Voyager/Positron for light mode
-    const tileUrl = isDark
+    const cartoApiKey = (import.meta.env.VITE_CARTO_BASEMAP_API_KEY || '').trim();
+    const baseCartoUrl = isDark
       ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
       : 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
+    const tileUrl = cartoApiKey
+      ? `${baseCartoUrl}?key=${encodeURIComponent(cartoApiKey)}`
+      : 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
 
     const tiles = L.tileLayer(tileUrl, {
-      subdomains: 'abcd',
+      subdomains: cartoApiKey ? 'abcd' : 'abc',
       maxZoom: 19,
     }).addTo(map);
     tileLayerRef.current = tiles;
@@ -242,38 +442,35 @@ export const MapView = ({
         .bindPopup('<strong style="font-family:Inter,sans-serif;">You are here</strong>');
     }
 
-    // Render Match Pins
+    // Render Match Pins (Sport icon + remaining slot number only)
     filteredMatches.forEach((match) => {
       const lat = match.coordinates?.lat || 23.8103;
       const lng = match.coordinates?.lng || 90.4125;
       const isSelected = match.id === currentSelectedId;
-      const slotsLeft = (match.totalSlots || 0) - (match.filledSlots || 0);
-
-      const sportLabel = (match.sport || 'Sports').split(' ')[0];
-      const slotText = slotsLeft > 0 ? `${slotsLeft} left` : 'Full';
+      const slotsLeft = Math.max(0, (match.totalSlots || 0) - (match.filledSlots || 0));
+      const sportIconHtml = getSportMarkerIconHtml(match);
 
       const customHtml = `
         <div style="
           transform: translate(-50%, -50%);
           display: inline-flex;
           align-items: center;
-          gap: 6px;
-          padding: ${isSelected ? '6px 14px' : '4px 10px'};
+          gap: 5px;
+          padding: ${isSelected ? '5px 11px' : '4px 9px'};
           border-radius: 9999px;
           background-color: ${isSelected ? '#B9F34A' : isDark ? '#1B2923' : '#FFFFFF'};
           color: ${isSelected ? '#131F00' : isDark ? '#FFFFFF' : '#101A17'};
           border: ${isSelected ? '2px solid #FFFFFF' : '1.5px solid #B9F34A'};
           box-shadow: 0 4px 14px rgba(0,0,0,0.35);
           font-family: Inter, sans-serif;
-          font-size: 11px;
-          font-weight: 700;
+          font-size: 12px;
+          font-weight: 800;
           cursor: pointer;
           white-space: nowrap;
           transition: transform 120ms ease;
         ">
-          <span style="width:6px;height:6px;border-radius:9999px;background:${isSelected ? '#131F00' : '#B9F34A'};"></span>
-          <span>${sportLabel}</span>
-          <span style="opacity: 0.85; font-size: 10px;">• ${slotText}</span>
+          ${sportIconHtml}
+          <span style="font-variant-numeric: tabular-nums;">${slotsLeft}</span>
         </div>
       `;
 
@@ -335,67 +532,80 @@ export const MapView = ({
           </div>
 
           {/* Area / Zone Dropdown */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 w-full sm:w-auto">
             <span className="font-label text-xs font-semibold text-light-muted dark:text-dark-muted shrink-0 hidden sm:inline">
               Selected Zone:
             </span>
             <select
               value={selectedZoneId}
               onChange={(e) => handleZoneSelect(e.target.value, e)}
-              className="px-3 py-1.5 rounded-md bg-light-background dark:bg-dark-background border border-light-border dark:border-dark-border text-light-on-background dark:text-dark-on-background font-body text-xs focus:outline-none focus:ring-2 focus:ring-primary font-medium"
+              className="flex-1 sm:flex-initial min-w-0 px-3 py-1.5 rounded-md bg-light-background dark:bg-dark-background border border-light-border dark:border-dark-border text-light-on-background dark:text-dark-on-background font-body text-xs focus:outline-none focus:ring-2 focus:ring-primary font-medium"
             >
-              {DHAKA_ZONES.map((zone) => (
+              {dynamicZones.map((zone) => (
                 <option key={zone.id} value={zone.id}>
                   {zone.label} ({zone.sublabel})
                 </option>
               ))}
             </select>
 
-            {/* Geolocation Button */}
+            {/* Focus on Selected Zone Button (beside Selected Zone dropdown) */}
             <button
               type="button"
-              onClick={handleLocateMe}
-              title="Locate my position in Dhaka"
-              aria-label="Locate my current position"
-              disabled={isLocating}
-              className="w-8 h-8 rounded-md bg-light-background dark:bg-dark-background border border-light-border dark:border-dark-border hover:border-primary flex items-center justify-center text-primary transition-colors disabled:opacity-50 shrink-0"
+              onClick={handleFocusSelectedZone}
+              title={`Center map on ${currentZone?.label || 'selected zone'}`}
+              aria-label="Center map on selected zone"
+              className="w-8 h-8 rounded-md bg-light-background dark:bg-dark-background border border-light-border dark:border-dark-border hover:border-primary flex items-center justify-center text-primary transition-colors shrink-0"
             >
-              <FontAwesomeIcon icon={faLocationCrosshairs} className={`text-xs ${isLocating ? 'animate-spin' : ''}`} />
+              <FontAwesomeIcon icon={faLocationDot} className="text-xs" />
             </button>
           </div>
         </div>
 
-        {/* Second Row: Live Search Bar within Map */}
-        <div className="relative flex items-center">
-          <FontAwesomeIcon
-            icon={faMagnifyingGlass}
-            className="absolute left-3.5 text-light-muted dark:text-dark-muted text-xs pointer-events-none"
-          />
-          <input
-            type="search"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search area, zone, venue or sport in Dhaka... (e.g., Banani, Mirpur, Futsal, Badminton)"
-            className="w-full pl-9 pr-9 py-2 rounded-lg bg-light-background dark:bg-dark-background border border-light-border dark:border-dark-border font-body text-xs sm:text-sm text-light-on-background dark:text-dark-on-background placeholder:text-light-muted dark:placeholder:text-dark-muted focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all"
-          />
-          {searchQuery && (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.preventDefault();
-                setSearchQuery('');
+        {/* Second Row: Live Search Area & Matches within Map */}
+        <form onSubmit={handleSearchAreaOnMap} className="flex gap-2">
+          <div className="relative flex-1 flex items-center">
+            <FontAwesomeIcon
+              icon={faMagnifyingGlass}
+              className="absolute left-3.5 text-light-muted dark:text-dark-muted text-xs pointer-events-none"
+            />
+            <input
+              type="search"
+              value={searchQuery}
+              onChange={(e) => {
+                const val = e.target.value;
+                setSearchQuery(val);
+                if (!val.trim()) setSearchedArea(null);
               }}
-              aria-label="Clear search"
-              className="absolute right-3 text-light-muted hover:text-light-on-background dark:hover:text-dark-on-background text-xs"
-            >
-              <FontAwesomeIcon icon={faXmark} />
-            </button>
-          )}
-        </div>
+              placeholder="Search any area in Bangladesh (e.g., Dhanmondi, Sylhet, Chattogram, Bogura) or sport..."
+              className="w-full pl-9 pr-9 py-2 rounded-lg bg-light-background dark:bg-dark-background border border-light-border dark:border-dark-border font-body text-xs sm:text-sm text-light-on-background dark:text-dark-on-background placeholder:text-light-muted dark:placeholder:text-dark-muted focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  setSearchQuery('');
+                  setSearchedArea(null);
+                }}
+                aria-label="Clear search"
+                className="absolute right-3 text-light-muted hover:text-light-on-background dark:hover:text-dark-on-background text-xs"
+              >
+                <FontAwesomeIcon icon={faXmark} />
+              </button>
+            )}
+          </div>
+          <button
+            type="submit"
+            disabled={searchingArea}
+            className="px-3.5 py-2 rounded-lg bg-primary text-on-primary font-label text-xs font-semibold hover:opacity-90 disabled:opacity-50 shrink-0"
+          >
+            {searchingArea ? 'Locating...' : 'Find Area'}
+          </button>
+        </form>
 
         {/* Quick Zone Filter Pills */}
         <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none text-xs">
-          {DHAKA_ZONES.map((zone) => {
+          {dynamicZones.slice(0, 14).map((zone) => {
             const isSelected = selectedZoneId === zone.id;
             return (
               <button
@@ -416,17 +626,20 @@ export const MapView = ({
       </div>
 
       {/* ========================================================================= */}
-      {/* MAIN VIEWPORT CANVAS: Original Leaflet Map OR Custom Radar Canvas */}
+      {/* FULL-WIDTH INTERACTIVE MAP CARD                                         */}
       {/* ========================================================================= */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        <section
-          aria-label="Interactive Match Map Viewport"
-          className="lg:col-span-8 relative h-[560px] sm:h-[600px] rounded-xl border border-light-border dark:border-dark-border bg-light-surface dark:bg-dark-surface overflow-hidden shadow-sm flex flex-col justify-between"
-        >
+      <section
+        aria-label="Interactive Match Map Viewport"
+        className={
+          isFullScreen
+            ? 'fixed inset-0 z-50 w-screen h-[100dvh] bg-light-surface dark:bg-dark-surface overflow-hidden'
+            : 'relative w-full h-[400px] sm:h-[500px] lg:h-[560px] rounded-xl border border-light-border dark:border-dark-border bg-light-surface dark:bg-dark-surface overflow-hidden shadow-sm'
+        }
+      >
           {/* Mode A: Original Street Map (Leaflet OpenStreetMap / CartoDB) */}
           <div
             ref={leafletContainerRef}
-            className={`w-full h-full ${mapMode === 'original' ? 'block' : 'hidden'}`}
+            className={`absolute inset-0 w-full h-full ${mapMode === 'original' ? 'block' : 'hidden'}`}
             style={{ zIndex: 1 }}
           />
 
@@ -465,12 +678,14 @@ export const MapView = ({
                 </span>
               ))}
 
-              {/* Custom Map Match Markers */}
+              {/* Custom Map Match Markers (Sport icon + remaining slot number only) */}
               {filteredMatches.map((match) => {
                 const isSelected = match.id === currentSelectedId;
                 const x = match.coordinates?.x || 380;
                 const y = match.coordinates?.y || 260;
-                const slotsLeft = (match.totalSlots || 0) - (match.filledSlots || 0);
+                const slotsLeft = Math.max(0, (match.totalSlots || 0) - (match.filledSlots || 0));
+                const iconUrl = match?.sportDto?.iconUrl;
+                const isImgUrl = iconUrl && /^https?:\/\//i.test(iconUrl);
 
                 return (
                   <button
@@ -479,25 +694,26 @@ export const MapView = ({
                     onClick={(e) => handleSelectMatch(match, e)}
                     style={{ left: `${x}px`, top: `${y}px` }}
                     aria-label={`Match marker: ${match.title}`}
-                    className={`absolute transform -translate-x-1/2 -translate-y-1/2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full font-label text-xs font-bold transition-all shadow-lg focus:outline-none focus:ring-2 focus:ring-primary ${
+                    className={`absolute transform -translate-x-1/2 -translate-y-1/2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full font-label text-xs font-bold transition-all shadow-lg focus:outline-none focus:ring-2 focus:ring-primary ${
                       isSelected
                         ? 'bg-primary text-on-primary ring-4 ring-primary/30 z-20 scale-110'
                         : 'bg-light-surface-elevated dark:bg-dark-surface-elevated border border-primary text-light-on-surface dark:text-dark-on-surface hover:scale-105 z-10'
                     }`}
                   >
-                    <FontAwesomeIcon icon={faFutbol} className={isSelected ? 'text-on-primary text-xs' : 'text-primary text-xs'} />
-                    <span className="truncate max-w-[120px]">{match.sport?.split(' ')[0]}</span>
-                    <span className="opacity-80 tabular-nums">
-                      {slotsLeft > 0 ? `• ${slotsLeft} left` : '• Full'}
-                    </span>
+                    {isImgUrl ? (
+                      <img src={iconUrl} alt="" className="w-4 h-4 rounded-full object-cover" />
+                    ) : (
+                      <span className="text-sm leading-none">{getSportEmoji(match)}</span>
+                    )}
+                    <span className="tabular-nums">{slotsLeft}</span>
                   </button>
                 );
               })}
             </div>
           )}
 
-          {/* Floating Map Status Overlay */}
-          <div className="relative z-10 p-3 flex items-center justify-between pointer-events-none">
+          {/* Floating Map Status Overlay + Full Size / Minimize Toggle */}
+          <div className="absolute top-3 inset-x-3 z-20 flex items-center justify-between gap-2 pointer-events-none">
             <div className="pointer-events-auto flex items-center gap-2 px-3 py-1.5 rounded-lg bg-light-surface/90 dark:bg-dark-surface/90 backdrop-blur-md border border-light-border dark:border-dark-border text-xs font-label text-light-muted dark:text-dark-muted shadow-sm">
               <FontAwesomeIcon icon={faLocationDot} className="text-primary" />
               <span className="font-semibold text-light-on-surface dark:text-dark-on-surface">
@@ -508,14 +724,30 @@ export const MapView = ({
               </span>
             </div>
 
-            <div className="pointer-events-auto hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-light-surface/90 dark:bg-dark-surface/90 backdrop-blur-md border border-light-border dark:border-dark-border text-xs font-body text-light-muted dark:text-dark-muted shadow-sm">
-              <FontAwesomeIcon icon={faShieldHalved} className="text-success text-xs" />
-              <span>Privacy Shield Active</span>
+            <div className="pointer-events-auto flex items-center gap-2">
+              <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-light-surface/90 dark:bg-dark-surface/90 backdrop-blur-md border border-light-border dark:border-dark-border text-xs font-body text-light-muted dark:text-dark-muted shadow-sm">
+                <FontAwesomeIcon icon={faShieldHalved} className="text-success text-xs" />
+                <span>Privacy Shield Active</span>
+              </div>
+
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  setIsFullScreen((prev) => !prev);
+                }}
+                aria-label={isFullScreen ? 'Minimize map view' : 'Expand map to full screen'}
+                title={isFullScreen ? 'Minimize Map' : 'Full Size Map'}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-light-surface/95 dark:bg-dark-surface/95 backdrop-blur-md border border-light-border dark:border-dark-border hover:border-primary text-xs font-label font-semibold text-light-on-surface dark:text-dark-on-surface shadow-sm transition-colors"
+              >
+                <FontAwesomeIcon icon={isFullScreen ? faCompress : faExpand} className="text-primary text-xs" />
+                <span>{isFullScreen ? 'Minimize' : 'Full Size'}</span>
+              </button>
             </div>
           </div>
 
-          {/* Zoom and Reset Controls (Bottom Right) */}
-          <div className="relative z-10 self-end p-3 flex flex-col gap-2">
+          {/* Zoom and Locate Me Controls (Bottom Right, floating transparently over map tiles) */}
+          <div className="absolute bottom-3 right-3 z-20 flex flex-col gap-1.5 pointer-events-none">
             <button
               type="button"
               onClick={(e) => {
@@ -527,7 +759,7 @@ export const MapView = ({
                 }
               }}
               aria-label="Zoom in"
-              className="w-9 h-9 rounded-md bg-light-surface dark:bg-dark-surface border border-light-border dark:border-dark-border flex items-center justify-center text-light-on-surface dark:text-dark-on-surface hover:border-primary shadow-sm transition-colors"
+              className="pointer-events-auto w-8 h-8 rounded-md bg-light-surface/90 dark:bg-dark-surface/90 backdrop-blur-sm border border-light-border/80 dark:border-dark-border/80 flex items-center justify-center text-light-on-surface dark:text-dark-on-surface hover:border-primary shadow-sm transition-colors"
             >
               <FontAwesomeIcon icon={faPlus} className="text-xs" />
             </button>
@@ -542,33 +774,28 @@ export const MapView = ({
                 }
               }}
               aria-label="Zoom out"
-              className="w-9 h-9 rounded-md bg-light-surface dark:bg-dark-surface border border-light-border dark:border-dark-border flex items-center justify-center text-light-on-surface dark:text-dark-on-surface hover:border-primary shadow-sm transition-colors"
+              className="pointer-events-auto w-8 h-8 rounded-md bg-light-surface/90 dark:bg-dark-surface/90 backdrop-blur-sm border border-light-border/80 dark:border-dark-border/80 flex items-center justify-center text-light-on-surface dark:text-dark-on-surface hover:border-primary shadow-sm transition-colors"
             >
               <FontAwesomeIcon icon={faMinus} className="text-xs" />
             </button>
             <button
               type="button"
-              onClick={(e) => {
-                e.preventDefault();
-                if (mapMode === 'original' && leafletMapInstanceRef.current) {
-                  leafletMapInstanceRef.current.flyTo([currentZone.lat, currentZone.lng], currentZone.zoom, { duration: 1.0 });
-                } else {
-                  setCustomZoom(1);
-                }
-              }}
-              aria-label="Reset zoom"
-              title="Reset to selected zone view"
-              className="w-9 h-9 rounded-md bg-light-surface dark:bg-dark-surface border border-light-border dark:border-dark-border flex items-center justify-center text-light-on-surface dark:text-dark-on-surface hover:border-primary shadow-sm transition-colors"
+              onClick={handleLocateMe}
+              disabled={isLocating}
+              aria-label="Locate my position"
+              title="Locate my position"
+              className="pointer-events-auto w-8 h-8 rounded-md bg-light-surface/90 dark:bg-dark-surface/90 backdrop-blur-sm border border-light-border/80 dark:border-dark-border/80 flex items-center justify-center text-light-on-surface dark:text-dark-on-surface hover:border-primary shadow-sm transition-colors disabled:opacity-50"
             >
-              <FontAwesomeIcon icon={faLocationCrosshairs} className="text-xs text-primary" />
+              <FontAwesomeIcon icon={faLocationCrosshairs} className={`text-xs text-primary ${isLocating ? 'animate-spin' : ''}`} />
             </button>
           </div>
         </section>
 
-        {/* ========================================================================= */}
-        {/* RIGHT COLUMN: Selected Match Details Preview Card */}
-        {/* ========================================================================= */}
-        <aside className="lg:col-span-4 flex flex-col gap-4">
+      {/* ========================================================================= */}
+      {/* BELOW MAP ROW: Selected Match Card + Matches in Zone List (Side-by-side) */}
+      {/* ========================================================================= */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6 items-start">
+        <div className="lg:col-span-5 flex flex-col gap-4">
           {selectedMatch ? (
             <article className="rounded-xl bg-light-surface dark:bg-dark-surface border-2 border-primary p-5 flex flex-col gap-4 shadow-md transition-all duration-surface-enter">
               <div className="flex items-center justify-between gap-2">
@@ -659,48 +886,51 @@ export const MapView = ({
                 }}
                 className="font-label text-xs font-semibold text-primary hover:underline"
               >
-                Reset to Full Dhaka City View
+                Reset to All Bangladesh View
               </button>
             </div>
           )}
+        </div>
 
-          {/* Matches List Preview in Selected Zone */}
-          <div className="rounded-xl bg-light-surface dark:bg-dark-surface border border-light-border dark:border-dark-border p-4 flex flex-col gap-3">
-            <h4 className="font-headline text-xs uppercase tracking-wider font-bold text-light-muted dark:text-dark-muted">
-              Matches in {currentZone.label} ({filteredMatches.length})
+        {/* Matches List Preview in Selected / Searched Area */}
+        <div className="lg:col-span-7 rounded-xl bg-light-surface dark:bg-dark-surface border border-light-border dark:border-dark-border p-4 sm:p-5 flex flex-col gap-3">
+          <div className="flex items-center justify-between">
+            <h4 className="font-headline text-xs sm:text-sm uppercase tracking-wider font-bold text-light-muted dark:text-dark-muted">
+              Matches {searchedArea ? `Near ${searchedArea.label}` : `in ${currentZone.label}`} ({filteredMatches.length})
             </h4>
-            <div className="flex flex-col gap-2 max-h-56 overflow-y-auto pr-1">
-              {filteredMatches.map((m) => {
-                const isSelected = m.id === currentSelectedId;
-                const slotsLeft = (m.totalSlots || 0) - (m.filledSlots || 0);
-                return (
-                  <button
-                    key={m.id}
-                    type="button"
-                    onClick={(e) => handleSelectMatch(m, e)}
-                    className={`text-left p-2.5 rounded-lg border transition-all flex items-center justify-between gap-2 ${
-                      isSelected
-                        ? 'border-primary bg-light-surface-elevated dark:bg-dark-surface-elevated'
-                        : 'border-light-border dark:border-dark-border hover:border-primary/60'
-                    }`}
-                  >
-                    <div className="min-w-0">
-                      <p className="font-headline text-xs font-bold text-light-on-surface dark:text-dark-on-surface truncate">
-                        {m.title}
-                      </p>
-                      <p className="font-body text-[11px] text-light-muted dark:text-dark-muted truncate">
-                        {m.venue} • {m.schedule || m.time}
-                      </p>
-                    </div>
-                    <span className="font-label text-[10px] font-bold text-primary shrink-0 tabular-nums">
-                      {slotsLeft > 0 ? `${slotsLeft} slots` : 'Full'}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
           </div>
-        </aside>
+          <div className="flex flex-col gap-2 max-h-96 overflow-y-auto pr-1">
+            {filteredMatches.map((m) => {
+              const isSelected = m.id === currentSelectedId;
+              const slotsLeft = (m.totalSlots || 0) - (m.filledSlots || 0);
+              return (
+                <button
+                  key={m.id}
+                  type="button"
+                  onClick={(e) => handleSelectMatch(m, e)}
+                  className={`text-left p-3 rounded-lg border transition-all flex items-center justify-between gap-2 ${
+                    isSelected
+                      ? 'border-primary bg-light-surface-elevated dark:bg-dark-surface-elevated'
+                      : 'border-light-border dark:border-dark-border hover:border-primary/60'
+                  }`}
+                >
+                  <div className="min-w-0">
+                    <p className="font-headline text-xs sm:text-sm font-bold text-light-on-surface dark:text-dark-on-surface truncate">
+                      {m.title}
+                    </p>
+                    <p className="font-body text-[11px] sm:text-xs text-light-muted dark:text-dark-muted truncate">
+                      {m.venue} • {m.schedule || m.time}
+                      {typeof m._areaDistKm === 'number' ? ` • ${m._areaDistKm.toFixed(1)} km` : ''}
+                    </p>
+                  </div>
+                  <span className="font-label text-[11px] font-bold text-primary shrink-0 tabular-nums">
+                    {slotsLeft > 0 ? `${slotsLeft} slots` : 'Full'}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
       </div>
     </div>
   );

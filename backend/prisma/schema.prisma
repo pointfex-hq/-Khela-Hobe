@@ -1,0 +1,1097 @@
+// Prisma Schema for Khela Hobe Backend
+// Uses Supabase PostgreSQL (with PostGIS)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ============================================
+// UTILITY & AUDIT
+// ============================================
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String?
+  action     String
+  entityType String
+  entityId   String?
+  ipAddress  String?
+  userAgent  String?
+  notes      String?
+  metadata   Json?
+  createdAt  DateTime @default(now())
+
+  @@index([userId])
+  @@index([action])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+}
+
+// ============================================
+// AUTHENTICATION & USERS
+// ============================================
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+  BANNED
+  DELETED
+  VERIFYING_EMAIL
+  VERIFYING_PHONE
+  PENDING_ROLE_ASSIGNMENT
+}
+
+enum OrganizerApprovalStatus {
+  NONE
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum OtpPurpose {
+  EMAIL_VERIFY
+  PASSWORD_RESET
+}
+
+model User {
+  id                      String                  @id @default(cuid())
+  fullName                String
+  email                   String                  @unique
+  phoneNumber             String?
+  passwordHash            String?
+  googleId                String?                 @unique
+  googleEmail             String?
+  googleLinkedAt          DateTime?
+  profileImageUrl         String?
+  bio                     String?
+  city                    String?
+  area                    String?
+  primarySkillLevel       PlayerSkillLevel?
+  status                  UserStatus              @default(ACTIVE)
+  emailVerified           Boolean                 @default(false)
+  parentalControlEnabled  Boolean                 @default(false)
+  organizerApprovalStatus OrganizerApprovalStatus @default(NONE)
+  organizerApprovalNote   String?
+  organizerApprovedAt     DateTime?
+  organizerApprovedBy     String?
+  quickMatchHostEnabled   Boolean                 @default(false)
+  quickMatchHostEnabledAt DateTime?
+
+  roles                   UserRoleAssignment[]
+  sessions                Session[]               @relation("UserSessions")
+  verificationOtps        VerificationOtp[]
+  playerProfile           PlayerProfile?
+  organizedMatches       Match[]                 @relation("OrganizedMatches")
+  matchParticipants      MatchParticipant[]
+  matchApplications      MatchApplication[]
+  notifications          Notification[]
+  reportsFiled           Report[]                @relation("ReportsFiled")
+  venues                 Venue[]
+  equipmentItems         EquipmentItem[]
+  playerGuardianLinks    PlayerGuardianLink[]    @relation("PlayerGuardianLinks")
+  dependentGuardianLinks DependentGuardianLink[] @relation("DependentGuardianLinks")
+  paymentTransactions    PaymentTransaction[]
+  sentMatchMessages      MatchMessage[]          @relation("MatchMessageSender")
+  receivedMatchMessages  MatchMessage[]          @relation("MatchMessageRecipient")
+  organizedTournaments   Tournament[]            @relation("OrganizedTournaments")
+  tournamentRegistrations TournamentRegistration[]
+  tournamentInterests    TournamentInterest[]
+  tickets                Ticket[]                @relation("TicketOwner")
+  issuedTickets          Ticket[]                @relation("TicketIssuer")
+  createdCoupons         TicketCoupon[]          @relation("CouponCreator")
+  equipmentContributions EquipmentContribution[]
+  notificationPreference NotificationPreference?
+  ratingsGiven           UserRating[]            @relation("RatingsGiven")
+  ratingsReceived        UserRating[]            @relation("RatingsReceived")
+  organizerSettlements   OrganizerSettlement[]   @relation("OrganizerSettlements")
+  createdAt              DateTime                @default(now())
+  updatedAt              DateTime                @updatedAt
+
+  @@index([email])
+  @@index([status])
+}
+
+enum UserRole {
+  PLAYER
+  ORGANIZER
+  GUARDIAN
+  ADMIN
+}
+
+model UserRoleAssignment {
+  id        String    @id @default(cuid())
+  userId    String
+  role      UserRole
+  grantedBy String?
+  grantedAt DateTime  @default(now())
+  expiresAt DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, role])
+  @@index([userId])
+  @@index([role])
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  ipAddress String?
+  userAgent String?
+  expiresAt DateTime
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  user User @relation("UserSessions", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@index([userId, active])
+}
+
+model VerificationOtp {
+  id         String     @id @default(cuid())
+  userId     String?
+  email      String
+  codeHash   String
+  purpose    OtpPurpose
+  expiresAt  DateTime
+  consumedAt DateTime?
+  attempts   Int        @default(0)
+  createdAt  DateTime   @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([email, purpose])
+  @@index([userId, purpose])
+  @@index([expiresAt])
+}
+
+// ============================================
+// PLAYER PROFILE & SAFETY ID
+// ============================================
+
+model PlayerProfile {
+  id          String           @id @default(cuid())
+  userId      String           @unique
+  displayName String
+  bio         String?
+  dateOfBirth DateTime?
+  gender      String?
+  city        String
+  area        String?
+  skillLevel  PlayerSkillLevel @default(INTERMEDIATE)
+
+  user          User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  safetyProfile SafetyProfile?
+  guardianLinks PlayerGuardianLink[] @relation("PlayerGuardianLinks")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([city, area, userId])
+  @@map("player_profiles")
+}
+
+enum PlayerSkillLevel {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+  EXPERT
+  PROFESSIONAL
+}
+
+model PlayerSport {
+  id         String           @id @default(cuid())
+  playerId   String
+  sportId    String
+  skillLevel PlayerSkillLevel
+  positions  String?
+  createdAt  DateTime         @default(now())
+
+  @@unique([playerId, sportId])
+  @@index([playerId, sportId])
+  @@index([playerId])
+}
+
+model PlayerPreference {
+  id                String   @id @default(cuid())
+  playerId          String   @unique
+  preferredSports   String[] @default([])
+  notificationEmail Boolean  @default(true)
+  notificationPush  Boolean  @default(false)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+model SafetyProfile {
+  id              String @id @default(cuid())
+  playerProfileId String @unique
+  safetyId        String @unique
+
+  playerProfile PlayerProfile @relation(fields: [playerProfileId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([safetyId])
+}
+
+// ============================================
+// GUARDIAN WORKFLOW
+// ============================================
+
+model GuardianProfile {
+  id           String   @id @default(cuid())
+  userId       String
+  guardianType String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model GuardianLinkRequest {
+  id               String     @id @default(cuid())
+  requestId        String
+  guardianId       String
+  childId          String
+  status           LinkStatus @default(PENDING)
+  guardianConsent  Boolean    @default(false)
+  childConsent     Boolean    @default(false)
+  verificationCode String?    @default(cuid())
+  verifiedAt       DateTime?
+  linkedProfileId  String?
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+
+  @@index([guardianId, status])
+  @@index([childId, status])
+}
+
+enum LinkStatus {
+  PENDING
+  PENDING_CONSENT
+  VERIFIED
+  REJECTED
+  REVOKED
+}
+
+model GuardianRelationship {
+  id           String   @id @default(cuid())
+  guardianId   String
+  childId      String
+  relationship String
+  permissions  String[]
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([guardianId, childId, active])
+  @@index([guardianId])
+  @@index([childId])
+}
+
+model ChildSafetySettings {
+  id                      String   @id @default(cuid())
+  guardianId              String
+  childId                 String
+  allowMatchParticipation Boolean  @default(true)
+  requireGuardianApproval Boolean  @default(true)
+  allowLocationSharing    Boolean  @default(false)
+  updatedAt               DateTime @updatedAt
+
+  @@unique([guardianId, childId])
+  @@index([childId])
+}
+
+model SafetyAlert {
+  id         String   @id @default(cuid())
+  guardianId String
+  childId    String
+  childName  String
+  type       String
+  title      String
+  message    String?
+  read       Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  @@index([guardianId, read])
+  @@index([guardianId, createdAt])
+}
+
+model PlayerGuardianLink {
+  id              String     @id @default(cuid())
+  playerProfileId String
+  guardianId      String
+  status          LinkStatus @default(PENDING)
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  playerProfile PlayerProfile @relation("PlayerGuardianLinks", fields: [playerProfileId], references: [id], onDelete: Cascade)
+  guardian      User          @relation("PlayerGuardianLinks", fields: [guardianId], references: [id], onDelete: Cascade)
+
+  @@unique([playerProfileId, guardianId])
+  @@index([playerProfileId])
+  @@index([guardianId])
+}
+
+model DependentGuardianLink {
+  id                 String     @id @default(cuid())
+  dependentProfileId String
+  guardianId         String
+  status             LinkStatus @default(PENDING)
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
+
+  dependentProfile DependentProfile @relation("DependentGuardianLinks", fields: [dependentProfileId], references: [id], onDelete: Cascade)
+  guardian         User             @relation("DependentGuardianLinks", fields: [guardianId], references: [id], onDelete: Cascade)
+
+  @@unique([dependentProfileId, guardianId])
+  @@index([dependentProfileId])
+  @@index([guardianId])
+}
+
+model DependentProfile {
+  id          String    @id @default(cuid())
+  guardianId  String
+  childName   String
+  dateOfBirth DateTime?
+  gender      String?
+  careType    CareType  @default(FULL_TIME)
+  safetyId    String    @unique
+
+  guardianLinks DependentGuardianLink[] @relation("DependentGuardianLinks")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([guardianId])
+  @@index([safetyId])
+}
+
+enum CareType {
+  FULL_TIME
+  PARTIAL_TIME
+  OCCASIONAL
+}
+
+// ============================================
+// SPORTS & VENUES
+// ============================================
+
+model Sport {
+  id             String   @id @default(cuid())
+  name           String   @unique
+  slug           String   @unique
+  description    String?
+  iconUrl        String?
+  positions      String?
+  playerCountMin Int?     @default(2)
+  playerCountMax Int?     @default(22)
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  matches Match[]
+
+  @@index([active])
+}
+
+enum VenueType {
+  TURF
+  STADIUM
+  PLAYGROUND
+  INDOOR_COURT
+  FIELD
+}
+
+model Zone {
+  id        String   @id @default(cuid())
+  name      String
+  division  String   @default("Dhaka")
+  city      String
+  area      String?
+  latitude  Float
+  longitude Float
+  zoom      Float    @default(13)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  venues Venue[]
+
+  @@unique([division, city, name])
+  @@index([division, active])
+}
+
+model Venue {
+  id            String    @id @default(cuid())
+  ownerId       String?
+  zoneId        String?
+  name          String
+  venueType     VenueType @default(TURF)
+  description   String?
+  facilities    String?
+  pricePerHour  Float?
+  address       String
+  city          String
+  area          String?
+  latitude      Float
+  longitude     Float
+  isTurf        Boolean   @default(false)
+  coverImageUrl String?
+  active        Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  owner   User?   @relation(fields: [ownerId], references: [id], onDelete: SetNull)
+  zone    Zone?   @relation(fields: [zoneId], references: [id], onDelete: SetNull)
+  matches Match[]
+
+  @@index([city])
+  @@index([ownerId])
+  @@index([zoneId])
+}
+
+model VenueImage {
+  id        String   @id @default(cuid())
+  venueId   String
+  imageUrl  String
+  isCover   Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([venueId])
+}
+
+// ============================================
+// MATCHES & PARTICIPATION
+// ============================================
+
+model Match {
+  id              String            @id @default(cuid())
+  title           String
+  description     String
+  matchType       MatchType
+  sportId         String
+  organizerId     String
+  venueId         String?
+  latitude        Float
+  longitude       Float
+  locationName    String?
+  locationAddress String?
+  city            String
+  area            String?
+  startTime       DateTime
+  endTime         DateTime
+  capacity        Int
+  minimumPlayers  Int
+  skillLevel      PlayerSkillLevel? @default(INTERMEDIATE)
+  joinMode        JoinMode          @default(INSTANT_JOIN)
+  status          MatchStatus       @default(OPEN)
+  visibility      MatchVisibility   @default(PUBLIC)
+  feeAmount       Float             @default(0)
+  equipmentFee    Float             @default(0)
+  allowOnlinePayment Boolean        @default(true)
+  coverImageUrl   String?
+  rules           String?
+  guardianRequired Boolean                                          @default(false)
+  minAge          Int                                               @default(0)
+  maxAge          Int                                               @default(99)
+
+  sport                 Sport                  @relation(fields: [sportId], references: [id])
+  organizer             User                   @relation("OrganizedMatches", fields: [organizerId], references: [id], onDelete: Cascade)
+  venue                 Venue?                 @relation(fields: [venueId], references: [id])
+  participants          MatchParticipant[]
+  applications          MatchApplication[]
+  equipmentRequirements EquipmentRequirement[]
+  messages              MatchMessage[]
+  ratings               UserRating[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+  @@index([organizerId])
+  @@index([sportId, city])
+  @@index([startTime])
+  @@index([latitude, longitude])
+}
+
+model MatchImage {
+  id        String   @id @default(cuid())
+  matchId   String
+  imageUrl  String
+  isCover   Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([matchId])
+}
+
+model MatchStatusHistory {
+  id             String      @id @default(cuid())
+  matchId        String
+  previousStatus MatchStatus
+  newStatus      MatchStatus
+  changedBy      String?
+  notes          String?
+  createdAt      DateTime    @default(now())
+
+  @@index([matchId])
+  @@index([createdAt])
+}
+
+enum MatchType {
+  QUICK_MATCH
+  ORGANIZED_MATCH
+}
+
+enum MatchStatus {
+  PROPOSED
+  OPEN
+  FULL
+  CLOSED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum MatchVisibility {
+  PUBLIC
+  PRIVATE
+  ORGANIZER_ONLY
+}
+
+enum JoinMode {
+  INSTANT_JOIN
+  APPROVAL_REQUIRED
+  APPLICATION_REQUIRED
+  WAITLIST
+}
+
+model MatchParticipant {
+  id       String            @id @default(cuid())
+  matchId  String
+  userId   String
+  status   ParticipantStatus @default(CONFIRMED)
+  joinedAt DateTime          @default(now())
+  leftAt   DateTime?
+
+  match Match @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([matchId, userId, leftAt])
+  @@index([matchId, status])
+  @@index([userId])
+}
+
+model MatchApplication {
+  id              String            @id @default(cuid())
+  matchId         String
+  userId          String
+  message         String?
+  status          ApplicationStatus @default(PENDING)
+  createdAt       DateTime          @default(now())
+  reviewedAt      DateTime?
+  reviewedBy      String?
+  reviewNote      String?
+  rejectionReason String?
+
+  match Match @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([matchId, userId])
+  @@index([matchId, status])
+  @@index([userId])
+}
+
+enum ParticipantStatus {
+  PENDING
+  CONFIRMED
+  DECLINED
+  WAITLISTED
+  LEFT
+  NO_SHOW
+}
+
+enum ApplicationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  WITHDRAWN
+}
+
+// ============================================
+// EQUIPMENT
+// ============================================
+
+model EquipmentItem {
+  id          String   @id @default(cuid())
+  name        String
+  category    String?
+  description String?
+  quantity    Int      @default(1)
+  ownerId     String?
+  sportId     String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  owner User? @relation(fields: [ownerId], references: [id], onDelete: SetNull)
+
+  @@index([ownerId])
+  @@index([sportId])
+}
+
+model EquipmentRequirement {
+  id                String   @id @default(cuid())
+  matchId           String
+  equipmentName     String
+  requiredQuantity  Int
+  committedQuantity Int      @default(0)
+  createdAt         DateTime @default(now())
+
+  match         Match                   @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  contributions EquipmentContribution[]
+
+  @@index([matchId])
+}
+
+model EquipmentContribution {
+  id            String   @id @default(cuid())
+  requirementId String
+  userId        String
+  quantity      Int
+  createdAt     DateTime @default(now())
+
+  requirement EquipmentRequirement @relation(fields: [requirementId], references: [id], onDelete: Cascade)
+  user        User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([requirementId, userId])
+  @@index([requirementId])
+}
+
+// ============================================
+// NOTIFICATIONS
+// ============================================
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  title     String
+  message   String
+  type      NotificationType
+  link      String?
+  read      Boolean          @default(false)
+  meta      Json?
+  createdAt DateTime         @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, read])
+  @@index([userId, createdAt])
+}
+
+model NotificationPreference {
+  id                    String   @id @default(cuid())
+  userId                String   @unique
+  emailMatchJoin        Boolean  @default(true)
+  emailApplication      Boolean  @default(true)
+  emailMatchUpdate      Boolean  @default(true)
+  emailTournamentAlerts Boolean  @default(true)
+  emailTicketUpdates    Boolean  @default(true)
+  emailAccountSecurity  Boolean  @default(true)
+  emailSafety           Boolean  @default(false)
+  pushEnabled           Boolean  @default(false)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+enum NotificationType {
+  MATCH_JOIN_CONFIRMED
+  MATCH_APPLICATION_RECEIVED
+  MATCH_UPDATED
+  MATCH_CANCELLED
+  SAFETY_ALERT
+  GUARDIAN_LINK_REQUEST
+  GAME_REMINDER
+  GENERAL
+}
+
+// ============================================
+// REPORTS & MODERATION
+// ============================================
+
+model Report {
+  id              String       @id @default(cuid())
+  reporterId      String
+  targetType      TargetType
+  targetId        String
+  targetName      String?
+  topic           ReportTopic  @default(MISCELLANEOUS)
+  reason          String?
+  description     String
+  evidenceUrl     String?
+  status          ReportStatus @default(PENDING)
+  resolvedBy      String?
+  resolvedAt      DateTime?
+  resolutionNote  String?
+  rejectionReason String?
+  createdAt       DateTime     @default(now())
+
+  reporter User @relation("ReportsFiled", fields: [reporterId], references: [id], onDelete: Cascade)
+
+  @@index([reporterId])
+  @@index([targetType, targetId, status])
+}
+
+enum TargetType {
+  USER
+  MATCH
+  VENUE
+  COMMENT
+  MESSAGE
+}
+
+enum ReportTopic {
+  INCORRECT_LOCATION
+  INAPPROPRIATE_CONTENT
+  HATE_SPEECH
+  SPAM
+  HARASSMENT
+  MISCELLANEOUS
+}
+
+enum ReportStatus {
+  PENDING
+  UNDER_REVIEW
+  RESOLVED
+  DISMISSED
+}
+
+model ModerationAction {
+  id         String   @id @default(cuid())
+  reporterId String
+  targetId   String
+  action     String
+  reason     String
+  createdAt  DateTime @default(now())
+}
+
+// ============================================
+// PAYMENTS (SSLCOMMERZ)
+// ============================================
+
+enum PaymentStatus {
+  PENDING
+  VALIDATED
+  FAILED
+  CANCELLED
+}
+
+model PaymentTransaction {
+  id            String        @id @default(cuid())
+  tranId        String        @unique
+  valId         String?
+  bankTranId    String?
+  cardType      String?
+  cardIssuer    String?
+  storeAmount   Float?
+  amount        Float
+  currency      String        @default("BDT")
+  purpose       String        @default("MATCH_FEE")
+  referenceId   String?
+  userId        String?
+  organizerId   String?
+  settlementId  String?
+  customerName  String
+  customerEmail String
+  customerPhone String
+  status        PaymentStatus @default(PENDING)
+  sessionKey    String?
+  gatewayUrl    String?
+  metadata      Json?
+  rawResponse   Json?
+  paidAt        DateTime?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  user       User?                @relation(fields: [userId], references: [id], onDelete: SetNull)
+  settlement OrganizerSettlement? @relation(fields: [settlementId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([organizerId])
+  @@index([settlementId])
+  @@index([referenceId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+enum RatingContext {
+  PLAYER_TO_ORGANIZER
+  ORGANIZER_TO_PLAYER
+}
+
+model UserRating {
+  id           String        @id @default(cuid())
+  raterId      String
+  targetUserId String
+  matchId      String?
+  contextRole  RatingContext @default(PLAYER_TO_ORGANIZER)
+  score        Int
+  comment      String?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  rater      User   @relation("RatingsGiven", fields: [raterId], references: [id], onDelete: Cascade)
+  targetUser User   @relation("RatingsReceived", fields: [targetUserId], references: [id], onDelete: Cascade)
+  match      Match? @relation(fields: [matchId], references: [id], onDelete: SetNull)
+
+  @@index([targetUserId, contextRole])
+  @@index([raterId])
+  @@index([matchId])
+}
+
+enum SettlementStatus {
+  PENDING
+  PROCESSING
+  SETTLED
+  REJECTED
+}
+
+model OrganizerSettlement {
+  id                String           @id @default(cuid())
+  organizerId       String
+  grossAmount       Float
+  platformFeeRate   Float            @default(0.10)
+  platformFeeAmount Float
+  netPayoutAmount   Float
+  payoutMethod      String           @default("BKASH")
+  payoutAccount     String
+  referenceNo       String?
+  notes             String?
+  status            SettlementStatus @default(PENDING)
+  requestedById     String
+  settledById       String?
+  settledAt         DateTime?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  organizer    User                 @relation("OrganizerSettlements", fields: [organizerId], references: [id], onDelete: Cascade)
+  transactions PaymentTransaction[]
+
+  @@index([organizerId, status])
+  @@index([status])
+}
+
+// ============================================
+// MATCH CHAT & DIRECT MESSAGING
+// ============================================
+
+model MatchMessage {
+  id          String   @id @default(cuid())
+  matchId     String
+  senderId    String
+  recipientId String?
+  content     String
+  createdAt   DateTime @default(now())
+
+  match     Match @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  sender    User  @relation("MatchMessageSender", fields: [senderId], references: [id], onDelete: Cascade)
+  recipient User? @relation("MatchMessageRecipient", fields: [recipientId], references: [id], onDelete: SetNull)
+
+  @@index([matchId, createdAt])
+  @@index([matchId, recipientId])
+  @@index([senderId])
+}
+
+// ============================================
+// TOURNAMENTS & ADMIN MODERATION
+// ============================================
+
+enum TournamentStatus {
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
+  COMPLETED
+  CANCELLED
+}
+
+enum TournamentPaymentMode {
+  OPEN_FREE
+  ONLINE_REQUIRED
+  OPTIONAL_VENUE
+}
+
+enum SpectatorMode {
+  NONE
+  OPEN_FREE
+  LIMITED_TICKETS
+}
+
+enum TicketStatus {
+  RESERVED
+  PAID
+  USED
+  CANCELLED
+  EXPIRED
+}
+
+enum DiscountType {
+  PERCENTAGE
+  FIXED
+}
+
+model Tournament {
+  id                  String                @id @default(cuid())
+  title               String
+  sport               String
+  format              String                @default("Knockouts")
+  description         String
+  features            String?
+  rules               String?
+  championPrize       String?
+  runnerUpPrize       String?
+  mvpPrize            String?
+  prizePool           String?
+  organizerId         String
+  venueName           String
+  city                String                @default("Dhaka")
+  area                String?
+  latitude            Float?
+  longitude           Float?
+  startDate           String
+  time                String                @default("17:00")
+  duration            String                @default("2 Days")
+  maxTeams            Int                   @default(16)
+  teamSize            Int                   @default(7)
+  entryFee            Float                 @default(0)
+  paymentMode         TournamentPaymentMode @default(OPTIONAL_VENUE)
+  requireTeamApproval Boolean               @default(true)
+  spectatorMode       SpectatorMode         @default(OPEN_FREE)
+  spectatorCapacity   Int                   @default(0)
+  ticketPrice         Float                 @default(0)
+  vipTicketPrice      Float?
+  coverImageUrl       String?
+  bannerImages        String[]              @default([])
+  standingsJson       Json?
+  fixturesJson        Json?
+  resultsJson         Json?
+  status              TournamentStatus      @default(PENDING_APPROVAL)
+  moderationNote      String?
+  moderatedBy         String?
+  moderatedAt         DateTime?
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+
+  organizer     User                     @relation("OrganizedTournaments", fields: [organizerId], references: [id], onDelete: Cascade)
+  registrations TournamentRegistration[]
+  interests     TournamentInterest[]
+  coupons       TicketCoupon[]
+  tickets       Ticket[]
+
+  @@index([organizerId])
+  @@index([status])
+  @@index([city])
+}
+
+model TournamentRegistration {
+  id            String   @id @default(cuid())
+  tournamentId  String
+  userId        String?
+  teamName      String
+  captainName   String
+  contactPhone  String
+  contactEmail  String?
+  membersJson   Json?
+  notes         String?
+  status        String   @default("PENDING")
+  paymentStatus String   @default("UNPAID")
+  tranId        String?
+  createdAt     DateTime @default(now())
+
+  tournament Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  user       User?      @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([tournamentId])
+  @@index([userId])
+}
+
+model TournamentInterest {
+  id           String   @id @default(cuid())
+  tournamentId String
+  userId       String
+  createdAt    DateTime @default(now())
+
+  tournament Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([tournamentId, userId])
+  @@index([tournamentId])
+  @@index([userId])
+}
+
+model TicketCoupon {
+  id                String       @id @default(cuid())
+  tournamentId      String
+  code              String
+  discountType      DiscountType @default(PERCENTAGE)
+  discountValue     Float
+  maxUses           Int          @default(50)
+  usedCount         Int          @default(0)
+  eligibleUserIds   String[]     @default([])
+  eligibleSafetyIds String[]     @default([])
+  expiresAt         DateTime?
+  active            Boolean      @default(true)
+  createdById       String
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  tournament Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  createdBy  User       @relation("CouponCreator", fields: [createdById], references: [id], onDelete: Cascade)
+
+  @@unique([tournamentId, code])
+  @@index([tournamentId, active])
+}
+
+model Ticket {
+  id             String       @id @default(cuid())
+  ticketCode     String       @unique
+  tournamentId   String
+  userId         String?
+  issuedById     String?
+  tierName       String       @default("General Spectator")
+  unitPrice      Float        @default(0)
+  discountAmount Float        @default(0)
+  finalPrice     Float        @default(0)
+  couponCode     String?
+  paymentMethod  String       @default("VENUE")
+  paymentStatus  String       @default("PENDING")
+  tranId         String?
+  attendeeName   String
+  attendeePhone  String
+  attendeeEmail  String?
+  status         TicketStatus @default(RESERVED)
+  qrPayload      String?
+  checkedInAt    DateTime?
+  checkedInBy    String?
+  expiresAt      DateTime?
+  cancelReason   String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  tournament Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  user       User?      @relation("TicketOwner", fields: [userId], references: [id], onDelete: SetNull)
+  issuedBy   User?      @relation("TicketIssuer", fields: [issuedById], references: [id], onDelete: SetNull)
+
+  @@index([tournamentId])
+  @@index([userId])
+  @@index([tranId])
+  @@index([status])
+}

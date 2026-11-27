@@ -32,7 +32,7 @@ export const ResetPasswordPage = () => {
     formState: { errors, isSubmitting },
   } = useForm({
     defaultValues: {
-      code: '123456',
+      code: '',
       password: '',
       confirmPassword: '',
     },

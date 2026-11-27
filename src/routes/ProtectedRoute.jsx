@@ -4,12 +4,14 @@ import { useAuth } from '../hooks/useAuth';
 import { ROUTES } from '../constants/routes';
 import LoadingSkeleton from '../components/common/LoadingSkeleton';
 
+import { ROLES } from '../constants/roles';
+
 /**
  * Role-Based Protected Route Guard
  * Enforces authentication and authorization permissions.
  */
-export const ProtectedRoute = ({ children, allowedRoles = [] }) => {
-  const { isAuthenticated, role, isLoading } = useAuth();
+export const ProtectedRoute = ({ children, allowedRoles = [], allowQuickMatchHost = false }) => {
+  const { isAuthenticated, user, role, roles = [], isLoading } = useAuth();
   const location = useLocation();
 
   const isAuth = typeof isAuthenticated === 'function' ? isAuthenticated() : Boolean(isAuthenticated);
@@ -23,12 +25,20 @@ export const ProtectedRoute = ({ children, allowedRoles = [] }) => {
   }
 
   if (!isAuth) {
-    // Redirect to login while saving the intended destination
     return <Navigate to={ROUTES.LOGIN} state={{ from: location }} replace />;
   }
 
-  if (allowedRoles.length > 0 && !allowedRoles.includes(role)) {
-    // Authenticated but unauthorized for this workspace
+  const userRoles = roles.length > 0 ? roles : role ? [role] : [];
+  const guardianViaParentalControl =
+    allowedRoles.includes(ROLES.GUARDIAN) && Boolean(user?.parentalControlEnabled);
+  const hostViaVerifiedPlayer =
+    allowQuickMatchHost && Boolean(user?.quickMatchHostEnabled);
+  if (
+    allowedRoles.length > 0 &&
+    !guardianViaParentalControl &&
+    !hostViaVerifiedPlayer &&
+    !userRoles.some((r) => allowedRoles.includes(r))
+  ) {
     return <Navigate to={ROUTES.UNAUTHORIZED} replace />;
   }
 

@@ -64,36 +64,42 @@ export const EventManagementPage = () => {
         </Link>
       </div>
 
-      {/* Future Events Payment Notice Banner (Lines 224-229) */}
-      <div className="rounded-lg bg-light-surface-elevated dark:bg-dark-surface-elevated border border-warning/60 p-4 flex items-center gap-3.5">
-        <FontAwesomeIcon icon={faTriangleExclamation} className="text-warning text-xl shrink-0" />
+      {/* Admin Moderation Notice Banner */}
+      <div className="rounded-lg bg-light-surface-elevated dark:bg-dark-surface-elevated border border-primary/40 p-4 flex items-center gap-3.5">
+        <FontAwesomeIcon icon={faTrophy} className="text-primary text-xl shrink-0" />
         <p className="font-body text-body-md text-light-muted dark:text-dark-muted">
           <strong className="text-light-on-surface dark:text-dark-on-surface font-semibold">
-            Online Payment Unavailable:
+            Tournament Moderation &amp; Prizes:
           </strong>{' '}
-          Automated bKash/Nagad/Card checkout is not yet active. Events currently use reservation passes with pay-at-venue check-in.
+          Submitted tournaments go through Admin moderation before public listing. Include champion/MVP prizes, rules, and venue coordinates for fast approval.
         </p>
       </div>
 
       {/* Filter Tabs */}
       <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
-        {['all', 'open', 'completed'].map((tab) => (
+        {[
+          { key: 'all', label: 'All Tournaments' },
+          { key: 'APPROVED', label: 'Approved / Open' },
+          { key: 'PENDING_APPROVAL', label: 'Pending Admin' },
+          { key: 'REJECTED', label: 'Needs Changes' },
+          { key: 'COMPLETED', label: 'Completed' },
+        ].map((tab) => (
           <button
-            key={tab}
+            key={tab.key}
             type="button"
-            onClick={() => setFilter(tab)}
-            className={`px-3.5 py-1.5 rounded-md font-label text-label-md capitalize transition-colors ${
-              filter === tab
+            onClick={() => setFilter(tab.key)}
+            className={`px-3.5 py-1.5 rounded-md font-label text-label-md transition-colors ${
+              filter === tab.key
                 ? 'bg-primary text-on-primary font-semibold'
                 : 'bg-light-surface dark:bg-dark-surface border border-light-border dark:border-dark-border text-light-muted dark:text-dark-muted hover:border-primary'
             }`}
           >
-            {tab === 'all' ? 'All Tournaments' : tab === 'open' ? 'Registration Open' : 'Completed'}
+            {tab.label}
           </button>
         ))}
       </div>
 
-      {/* Events List (Lines 232-265) */}
+      {/* Events List */}
       {loading ? (
         <div className="py-20 flex justify-center">
           <LoadingSpinner size="lg" message="Loading tournament fixtures..." />
@@ -102,14 +108,17 @@ export const EventManagementPage = () => {
         <EmptyState
           icon={faTrophy}
           title="No tournaments found"
-          description="You haven't published any tournament events in this category yet."
+          description="You haven't created any tournaments in this category yet."
           actionLabel="Create First Tournament"
           onAction={() => navigate(ROUTES.ORGANIZER_EVENT_CREATE)}
         />
       ) : (
         <div className="flex flex-col gap-4">
           {events.map((evt) => {
-            const isOpen = evt.status?.toLowerCase().includes('open');
+            const statusUpper = String(evt.status || '').toUpperCase();
+            const isOpen = statusUpper === 'APPROVED' || statusUpper.includes('OPEN');
+            const isRejected = statusUpper === 'REJECTED';
+            const registeredCount = evt.filledTeams ?? evt.registeredTeams ?? 0;
             return (
               <article
                 key={evt.id}
@@ -121,17 +130,21 @@ export const EventManagementPage = () => {
                       className={`px-2.5 py-0.5 rounded-full font-label text-label-sm font-semibold ${
                         isOpen
                           ? 'bg-success text-on-success'
-                          : 'bg-light-surface-elevated dark:bg-dark-surface-elevated text-light-muted dark:text-dark-muted'
+                          : isRejected
+                            ? 'bg-error/15 text-error'
+                            : 'bg-warning/20 text-warning'
                       }`}
                     >
                       {evt.status}
                     </span>
-                    <span className="font-mono text-mono-sm text-light-muted dark:text-dark-muted">
-                      {evt.code}
-                    </span>
                     <span className="px-2 py-0.5 rounded bg-primary/10 text-primary font-label text-xs font-semibold">
                       {evt.sport}
                     </span>
+                    {(evt.prizePool || evt.championPrize) && (
+                      <span className="px-2 py-0.5 rounded bg-warning/15 text-warning font-label text-xs font-semibold">
+                        🏆 {evt.prizePool || evt.championPrize}
+                      </span>
+                    )}
                   </div>
 
                   <h2 className="font-headline text-title-lg font-bold truncate">
@@ -139,31 +152,42 @@ export const EventManagementPage = () => {
                   </h2>
 
                   <p className="font-body text-body-md text-light-muted dark:text-dark-muted">
-                    {evt.venue} • {evt.date}, {evt.time} •{' '}
+                    {evt.venue} ({evt.city}) • {evt.date}, {evt.time} •{' '}
                     <span className="tabular-nums font-medium text-light-on-surface dark:text-dark-on-surface">
-                      {evt.registeredTeams} / {evt.totalTeams} teams registered
+                      {registeredCount} / {evt.totalTeams} teams registered
                     </span>
                   </p>
+                  {isRejected && evt.moderationNote && (
+                    <p className="font-body text-xs text-error">
+                      Admin Note: {evt.moderationNote}
+                    </p>
+                  )}
                 </div>
 
                 <div className="flex flex-wrap items-center gap-3 shrink-0">
+                  <Link
+                    to={ROUTES.ORGANIZER_EVENT_PARTICIPANTS.replace(':eventId', evt.id)}
+                    className="shrink-0 px-3.5 py-2 rounded-md bg-secondary/15 border border-secondary/30 text-secondary font-label text-label-md font-semibold hover:bg-secondary/20 transition-colors flex items-center gap-1.5"
+                  >
+                    <FontAwesomeIcon icon={faUsers} className="text-xs" />
+                    <span>Squads ({registeredCount})</span>
+                  </Link>
+
                   <Link
                     to={ROUTES.EVENT_DETAILS.replace(':eventId', evt.id)}
                     className="shrink-0 px-4 py-2 rounded-md bg-light-surface-elevated dark:bg-dark-surface-elevated border border-light-border dark:border-dark-border font-label text-label-md hover:border-primary transition-colors flex items-center gap-1.5"
                   >
                     <FontAwesomeIcon icon={faEye} className="text-xs text-light-muted dark:text-dark-muted" />
-                    <span>View Event</span>
+                    <span>View</span>
                   </Link>
 
-                  {isOpen && (
-                    <Link
-                      to={ROUTES.ORGANIZER_CHECK_IN}
-                      className="shrink-0 px-4 py-2 rounded-md bg-primary text-on-primary font-label text-label-md font-semibold hover:opacity-90 transition-opacity flex items-center gap-1.5"
-                    >
-                      <FontAwesomeIcon icon={faQrcode} className="text-xs" />
-                      <span>Open Check-In</span>
-                    </Link>
-                  )}
+                  <Link
+                    to={`${ROUTES.ORGANIZER_CHECK_IN}?eventId=${evt.id}`}
+                    className="shrink-0 px-4 py-2 rounded-md bg-primary text-on-primary font-label text-label-md font-semibold hover:opacity-90 transition-opacity flex items-center gap-1.5"
+                  >
+                    <FontAwesomeIcon icon={faQrcode} className="text-xs" />
+                    <span>Tickets &amp; Coupons</span>
+                  </Link>
 
                   <Link
                     to={ROUTES.ORGANIZER_EVENT_EDIT.replace(':eventId', evt.id)}
