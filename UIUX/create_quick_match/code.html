@@ -1,0 +1,437 @@
+<!DOCTYPE html><html lang="en" class="dark"><head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Create Quick Match — Khela Hobe</title>
+  <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+  <script id="tailwind-config">/** @type {import('tailwindcss').Config} */
+globalThis.tailwind = globalThis.tailwind || {};
+globalThis.tailwind.config = {
+  darkMode: 'class',
+  theme: {
+    extend: {
+      colors: {
+        'primary': '#B9F34A',
+        'on-primary': '#131F00',
+        'secondary': '#26865B',
+        'on-secondary': '#FFFFFF',
+        'accent': '#FF9F43',
+        'on-accent': '#1F1100',
+        'success': '#32C77A',
+        'on-success': '#002110',
+        'warning': '#FFC857',
+        'on-warning': '#261900',
+        'error': '#FF5C5C',
+        'on-error': '#2B0000',
+        'light-background': '#F4F8F5',
+        'light-on-background': '#101A17',
+        'light-surface': '#FFFFFF',
+        'light-on-surface': '#101A17',
+        'light-surface-elevated': '#E8F3EE',
+        'light-on-surface-elevated': '#101A17',
+        'light-muted': '#56615D',
+        'light-border': '#D0DDD6',
+        'dark-background': '#101A17',
+        'dark-on-background': '#FFFFFF',
+        'dark-surface': '#1B2923',
+        'dark-on-surface': '#FFFFFF',
+        'dark-surface-elevated': '#23342D',
+        'dark-on-surface-elevated': '#FFFFFF',
+        'dark-muted': '#9BAAA2',
+        'dark-border': '#2C3B34',
+      },
+      borderRadius: {
+        'sm': '6px',
+        'DEFAULT': '8px',
+        'md': '12px',
+        'lg': '16px',
+        'xl': '20px',
+        'full': '9999px',
+      },
+      spacing: {
+        'gutter-xs': '4px',
+        'gutter-sm': '8px',
+        'gutter-md': '16px',
+        'gutter-lg': '24px',
+        'gutter-xl': '32px',
+        'section': '48px',
+        'page-margin': '24px',
+      },
+      fontFamily: {
+        'display': ['"Manrope"', 'sans-serif'],
+        'headline': ['"Manrope"', 'sans-serif'],
+        'title': ['"Manrope"', 'sans-serif'],
+        'body': ['"Inter"', 'sans-serif'],
+        'label': ['"Inter"', 'sans-serif'],
+        'mono': ['"Fragment Mono"', 'monospace'],
+      },
+      fontSize: {
+        'display-lg': ['48px', { lineHeight: '54px', letterSpacing: '-0.75px', fontWeight: '800' }],
+        'display-lg-mobile': ['32px', { lineHeight: '38px', letterSpacing: '-0.5px', fontWeight: '800' }],
+        'headline-lg': ['32px', { lineHeight: '38px', letterSpacing: '-0.5px', fontWeight: '700' }],
+        'headline-md': ['24px', { lineHeight: '30px', letterSpacing: '-0.25px', fontWeight: '700' }],
+        'title-lg': ['20px', { lineHeight: '26px', letterSpacing: '-0.15px', fontWeight: '700' }],
+        'title-md': ['16px', { lineHeight: '22px', letterSpacing: '0px', fontWeight: '600' }],
+        'body-lg': ['16px', { lineHeight: '24px', letterSpacing: '0px', fontWeight: '400' }],
+        'body-md': ['14px', { lineHeight: '21px', letterSpacing: '0px', fontWeight: '400' }],
+        'body-sm': ['12px', { lineHeight: '18px', letterSpacing: '0px', fontWeight: '400' }],
+        'label-lg': ['14px', { lineHeight: '20px', letterSpacing: '0px', fontWeight: '600' }],
+        'label-md': ['12px', { lineHeight: '16px', letterSpacing: '0.2px', fontWeight: '600' }],
+        'label-sm': ['11px', { lineHeight: '14px', letterSpacing: '0.3px', fontWeight: '600' }],
+        'mono-sm': ['12px', { lineHeight: '16px', letterSpacing: '0px', fontWeight: '400' }],
+      },
+      transitionDuration: {
+        'state-change': '120ms',
+        'surface-enter': '220ms',
+        'surface-exit': '150ms',
+      },
+      transitionDelay: {
+        'state-change': '0ms',
+        'surface-enter': '0ms',
+        'surface-exit': '0ms',
+      },
+      transitionTimingFunction: {
+        'state-change': 'ease-out',
+        'surface-enter': 'cubic-bezier(0.2, 0, 0, 1)',
+        'surface-exit': 'cubic-bezier(0.3, 0, 1, 1)',
+      },
+    },
+  },
+};
+if (typeof module !== 'undefined') module.exports = globalThis.tailwind.config;
+</script>
+  <link href="https://fonts.googleapis.com/css2?family=Fragment+Mono&amp;family=Inter:wght@400;500;600;700&amp;family=Manrope:wght@600;700;800&amp;display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=block" rel="stylesheet">
+  <style>.material-symbols-outlined, .material-symbols-rounded, .material-symbols-sharp, .material-icons { display: inline-block; width: 1em; height: 1em; line-height: 1 !important; box-sizing: content-box; overflow: hidden; white-space: nowrap; direction: ltr; vertical-align: middle; }</style>
+</head>
+<body class="bg-light-background dark:bg-dark-background text-light-on-background dark:text-dark-on-background font-body antialiased min-h-[1024px] flex" data-stitch-vh="min-h-[1024px]===min-h-screen">
+
+  <!-- Persistent Desktop Sidebar (Shell Parity) -->
+  <aside class="hidden lg:flex w-64 shrink-0 min-h-[1024px] flex-col justify-between border-r border-light-border dark:border-dark-border bg-light-surface dark:bg-dark-surface p-4" data-stitch-vh="min-h-[1024px]===min-h-screen">
+    <div class="flex flex-col gap-6">
+      <a href="#" class="flex items-center gap-2.5 px-2 py-1">
+        <span class="w-9 h-9 rounded-md bg-primary text-on-primary flex items-center justify-center">
+          <span class="material-symbols-outlined text-title-lg" aria-hidden="true">sports_soccer</span>
+        </span>
+        <span class="font-headline text-title-lg" data-design-text-token="title-lg">Khela Hobe</span>
+      </a>
+
+      <nav aria-label="Workspace navigation" class="flex flex-col gap-6">
+        <div class="flex flex-col gap-1">
+          <span class="px-3 font-label text-label-sm uppercase text-light-muted dark:text-dark-muted" data-design-text-token="label-sm">General</span>
+          <a href="#" class="flex items-center gap-3 px-3 py-2.5 rounded-md text-light-muted dark:text-dark-muted hover:bg-light-surface-elevated dark:hover:bg-dark-surface-elevated hover:text-light-on-surface dark:hover:text-dark-on-surface font-label text-label-lg">
+            <span class="material-symbols-outlined text-title-md" aria-hidden="true">home</span>
+            <span data-design-text-token="label-lg">Home</span>
+          </a>
+          <a href="#" class="flex items-center gap-3 px-3 py-2.5 rounded-md text-light-muted dark:text-dark-muted hover:bg-light-surface-elevated dark:hover:bg-dark-surface-elevated hover:text-light-on-surface dark:hover:text-dark-on-surface font-label text-label-lg">
+            <span class="material-symbols-outlined text-title-md" aria-hidden="true">explore</span>
+            <span data-design-text-token="label-lg">Explore</span>
+          </a>
+          <a href="#" class="flex items-center gap-3 px-3 py-2.5 rounded-md text-light-muted dark:text-dark-muted hover:bg-light-surface-elevated dark:hover:bg-dark-surface-elevated hover:text-light-on-surface dark:hover:text-dark-on-surface font-label text-label-lg">
+            <span class="material-symbols-outlined text-title-md" aria-hidden="true">map</span>
+            <span data-design-text-token="label-lg">Map</span>
+          </a>
+          <a href="#" class="flex items-center gap-3 px-3 py-2.5 rounded-md text-light-muted dark:text-dark-muted hover:bg-light-surface-elevated dark:hover:bg-dark-surface-elevated hover:text-light-on-surface dark:hover:text-dark-on-surface font-label text-label-lg">
+            <span class="material-symbols-outlined text-title-md" aria-hidden="true">event_available</span>
+            <span data-design-text-token="label-lg">My Matches</span>
+          </a>
+        </div>
+
+        <div class="flex flex-col gap-1">
+          <span class="px-3 font-label text-label-sm uppercase text-light-muted dark:text-dark-muted" data-design-text-token="label-sm">Organizer</span>
+          <a href="#" class="flex items-center gap-3 px-3 py-2.5 rounded-md text-light-muted dark:text-dark-muted hover:bg-light-surface-elevated dark:hover:bg-dark-surface-elevated hover:text-light-on-surface dark:hover:text-dark-on-surface font-label text-label-lg">
+            <span class="material-symbols-outlined text-title-md" aria-hidden="true">dashboard</span>
+            <span data-design-text-token="label-lg">Organizer Hub</span>
+          </a>
+          <a href="#" class="flex items-center gap-3 px-3 py-2.5 rounded-md bg-primary text-on-primary font-label text-label-lg" aria-current="page">
+            <span class="material-symbols-outlined text-title-md" aria-hidden="true">add_circle</span>
+            <span data-design-text-token="label-lg">Create Match</span>
+          </a>
+          <a href="#" class="flex items-center gap-3 px-3 py-2.5 rounded-md text-light-muted dark:text-dark-muted hover:bg-light-surface-elevated dark:hover:bg-dark-surface-elevated hover:text-light-on-surface dark:hover:text-dark-on-surface font-label text-label-lg">
+            <span class="material-symbols-outlined text-title-md" aria-hidden="true">sports</span>
+            <span data-design-text-token="label-lg">Created Matches</span>
+          </a>
+        </div>
+
+        <div class="flex flex-col gap-1">
+          <span class="px-3 font-label text-label-sm uppercase text-light-muted dark:text-dark-muted" data-design-text-token="label-sm">Account</span>
+          <a href="#" class="flex items-center gap-3 px-3 py-2.5 rounded-md text-light-muted dark:text-dark-muted hover:bg-light-surface-elevated dark:hover:bg-dark-surface-elevated hover:text-light-on-surface dark:hover:text-dark-on-surface font-label text-label-lg">
+            <span class="material-symbols-outlined text-title-md" aria-hidden="true">person</span>
+            <span data-design-text-token="label-lg">My Profile</span>
+          </a>
+          <a href="#" class="flex items-center justify-between px-3 py-2.5 rounded-md text-light-muted dark:text-dark-muted hover:bg-light-surface-elevated dark:hover:bg-dark-surface-elevated hover:text-light-on-surface dark:hover:text-dark-on-surface font-label text-label-lg">
+            <span class="flex items-center gap-3">
+              <span class="material-symbols-outlined text-title-md" aria-hidden="true">notifications</span>
+              <span data-design-text-token="label-lg">Notifications</span>
+            </span>
+            <span data-component-id="badge-numeric" data-component-type="badge" data-component-variant="numeric" class="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-primary text-on-primary font-label text-label-sm tabular-nums">3</span>
+          </a>
+          <a href="#" class="flex items-center gap-3 px-3 py-2.5 rounded-md text-light-muted dark:text-dark-muted hover:bg-light-surface-elevated dark:hover:bg-dark-surface-elevated hover:text-light-on-surface dark:hover:text-dark-on-surface font-label text-label-lg">
+            <span class="material-symbols-outlined text-title-md" aria-hidden="true">shield_person</span>
+            <span data-design-text-token="label-lg">Guardian Safety</span>
+          </a>
+        </div>
+      </nav>
+    </div>
+
+    <div class="p-3 rounded-lg bg-light-surface-elevated dark:bg-dark-surface-elevated border border-light-border dark:border-dark-border flex items-center gap-3">
+      <img src="https://lh3.googleusercontent.com/aida/ALJJyrDpYAgpYST1dl8o6QMzQYBWv5ow6VVhizL5_LLubh5M9HFfGSC5ymnRd5wYlBKp_Q7BmrzxAIu8gqQbUVSYaFXR_0E3yfKnlYUBAqqjZjukjpUA1LIqEeXGrd9Jq-vx3EtZSVRNpcsI8Rcf6VQ1-EHjOaEi4dhh9Vm4I71pY3sAG23yMPyCBYAChvpmAwzvVqeaFzIZpqR2jhCSbXN3HBDpepUJP1tOR2C6PRu_arAIg98YSWddOg" alt="Tanvir Hasan" class="w-10 h-10 rounded-full object-cover">
+      <div class="min-w-0 flex-1">
+        <p class="font-label text-label-lg truncate" data-design-text-token="label-lg">Tanvir Hasan</p>
+        <p class="font-body text-body-sm text-light-muted dark:text-dark-muted truncate" data-design-text-token="body-sm">Player • Organizer</p>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Mobile Navigation Drawer -->
+  <div id="mobile-nav-drawer" class="fixed inset-0 z-50 lg:hidden hidden" role="dialog" aria-modal="true" aria-label="Mobile navigation">
+    <div class="fixed inset-0 bg-dark-background/80" onclick="document.getElementById(&#39;mobile-nav-drawer&#39;).classList.add(&#39;hidden&#39;)"></div>
+    <aside class="relative z-10 w-72 max-w-[85vw] min-h-[1024px] flex flex-col justify-between border-r border-light-border dark:border-dark-border bg-light-surface dark:bg-dark-surface p-4 overflow-y-auto" data-stitch-vh="min-h-[1024px]===min-h-screen">
+      <div class="flex justify-end mb-2">
+        <button type="button" aria-label="Close navigation menu" onclick="document.getElementById(&#39;mobile-nav-drawer&#39;).classList.add(&#39;hidden&#39;)" class="inline-flex items-center justify-center w-9 h-9 rounded-md bg-light-surface-elevated dark:bg-dark-surface-elevated border border-light-border dark:border-dark-border hover:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
+          <span class="material-symbols-outlined text-title-md" aria-hidden="true">close</span>
+        </button>
+      </div>
+      
+    <div class="flex flex-col gap-6">
+      <a href="#" class="flex items-center gap-2.5 px-2 py-1">
+        <span class="w-9 h-9 rounded-md bg-primary text-on-primary flex items-center justify-center">
+          <span class="material-symbols-outlined text-title-lg" aria-hidden="true">sports_soccer</span>
+        </span>
+        <span class="font-headline text-title-lg" data-design-text-token="title-lg">Khela Hobe</span>
+      </a>
+
+      <nav aria-label="Workspace navigation" class="flex flex-col gap-6">
+        <div class="flex flex-col gap-1">
+          <span class="px-3 font-label text-label-sm uppercase text-light-muted dark:text-dark-muted" data-design-text-token="label-sm">General</span>
+          <a href="#" class="flex items-center gap-3 px-3 py-2.5 rounded-md text-light-muted dark:text-dark-muted hover:bg-light-surface-elevated dark:hover:bg-dark-surface-elevated hover:text-light-on-surface dark:hover:text-dark-on-surface font-label text-label-lg">
+            <span class="material-symbols-outlined text-title-md" aria-hidden="true">home</span>
+            <span data-design-text-token="label-lg">Home</span>
+          </a>
+          <a href="#" class="flex items-center gap-3 px-3 py-2.5 rounded-md text-light-muted dark:text-dark-muted hover:bg-light-surface-elevated dark:hover:bg-dark-surface-elevated hover:text-light-on-surface dark:hover:text-dark-on-surface font-label text-label-lg">
+            <span class="material-symbols-outlined text-title-md" aria-hidden="true">explore</span>
+            <span data-design-text-token="label-lg">Explore</span>
+          </a>
+          <a href="#" class="flex items-center gap-3 px-3 py-2.5 rounded-md text-light-muted dark:text-dark-muted hover:bg-light-surface-elevated dark:hover:bg-dark-surface-elevated hover:text-light-on-surface dark:hover:text-dark-on-surface font-label text-label-lg">
+            <span class="material-symbols-outlined text-title-md" aria-hidden="true">map</span>
+            <span data-design-text-token="label-lg">Map</span>
+          </a>
+          <a href="#" class="flex items-center gap-3 px-3 py-2.5 rounded-md text-light-muted dark:text-dark-muted hover:bg-light-surface-elevated dark:hover:bg-dark-surface-elevated hover:text-light-on-surface dark:hover:text-dark-on-surface font-label text-label-lg">
+            <span class="material-symbols-outlined text-title-md" aria-hidden="true">event_available</span>
+            <span data-design-text-token="label-lg">My Matches</span>
+          </a>
+        </div>
+
+        <div class="flex flex-col gap-1">
+          <span class="px-3 font-label text-label-sm uppercase text-light-muted dark:text-dark-muted" data-design-text-token="label-sm">Organizer</span>
+          <a href="#" class="flex items-center gap-3 px-3 py-2.5 rounded-md text-light-muted dark:text-dark-muted hover:bg-light-surface-elevated dark:hover:bg-dark-surface-elevated hover:text-light-on-surface dark:hover:text-dark-on-surface font-label text-label-lg">
+            <span class="material-symbols-outlined text-title-md" aria-hidden="true">dashboard</span>
+            <span data-design-text-token="label-lg">Organizer Hub</span>
+          </a>
+          <a href="#" class="flex items-center gap-3 px-3 py-2.5 rounded-md bg-primary text-on-primary font-label text-label-lg" aria-current="page">
+            <span class="material-symbols-outlined text-title-md" aria-hidden="true">add_circle</span>
+            <span data-design-text-token="label-lg">Create Match</span>
+          </a>
+          <a href="#" class="flex items-center gap-3 px-3 py-2.5 rounded-md text-light-muted dark:text-dark-muted hover:bg-light-surface-elevated dark:hover:bg-dark-surface-elevated hover:text-light-on-surface dark:hover:text-dark-on-surface font-label text-label-lg">
+            <span class="material-symbols-outlined text-title-md" aria-hidden="true">sports</span>
+            <span data-design-text-token="label-lg">Created Matches</span>
+          </a>
+        </div>
+
+        <div class="flex flex-col gap-1">
+          <span class="px-3 font-label text-label-sm uppercase text-light-muted dark:text-dark-muted" data-design-text-token="label-sm">Account</span>
+          <a href="#" class="flex items-center gap-3 px-3 py-2.5 rounded-md text-light-muted dark:text-dark-muted hover:bg-light-surface-elevated dark:hover:bg-dark-surface-elevated hover:text-light-on-surface dark:hover:text-dark-on-surface font-label text-label-lg">
+            <span class="material-symbols-outlined text-title-md" aria-hidden="true">person</span>
+            <span data-design-text-token="label-lg">My Profile</span>
+          </a>
+          <a href="#" class="flex items-center justify-between px-3 py-2.5 rounded-md text-light-muted dark:text-dark-muted hover:bg-light-surface-elevated dark:hover:bg-dark-surface-elevated hover:text-light-on-surface dark:hover:text-dark-on-surface font-label text-label-lg">
+            <span class="flex items-center gap-3">
+              <span class="material-symbols-outlined text-title-md" aria-hidden="true">notifications</span>
+              <span data-design-text-token="label-lg">Notifications</span>
+            </span>
+            <span data-component-id="badge-numeric" data-component-type="badge" data-component-variant="numeric" class="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-primary text-on-primary font-label text-label-sm tabular-nums">3</span>
+          </a>
+          <a href="#" class="flex items-center gap-3 px-3 py-2.5 rounded-md text-light-muted dark:text-dark-muted hover:bg-light-surface-elevated dark:hover:bg-dark-surface-elevated hover:text-light-on-surface dark:hover:text-dark-on-surface font-label text-label-lg">
+            <span class="material-symbols-outlined text-title-md" aria-hidden="true">shield_person</span>
+            <span data-design-text-token="label-lg">Guardian Safety</span>
+          </a>
+        </div>
+      </nav>
+    </div>
+
+    <div class="p-3 rounded-lg bg-light-surface-elevated dark:bg-dark-surface-elevated border border-light-border dark:border-dark-border flex items-center gap-3">
+      <img src="https://lh3.googleusercontent.com/aida/ALJJyrDpYAgpYST1dl8o6QMzQYBWv5ow6VVhizL5_LLubh5M9HFfGSC5ymnRd5wYlBKp_Q7BmrzxAIu8gqQbUVSYaFXR_0E3yfKnlYUBAqqjZjukjpUA1LIqEeXGrd9Jq-vx3EtZSVRNpcsI8Rcf6VQ1-EHjOaEi4dhh9Vm4I71pY3sAG23yMPyCBYAChvpmAwzvVqeaFzIZpqR2jhCSbXN3HBDpepUJP1tOR2C6PRu_arAIg98YSWddOg" alt="Tanvir Hasan" class="w-10 h-10 rounded-full object-cover">
+      <div class="min-w-0 flex-1">
+        <p class="font-label text-label-lg truncate" data-design-text-token="label-lg">Tanvir Hasan</p>
+        <p class="font-body text-body-sm text-light-muted dark:text-dark-muted truncate" data-design-text-token="body-sm">Player • Organizer</p>
+      </div>
+    </div>
+  
+    </aside>
+  </div>
+
+  <!-- Main Workspace Column -->
+  <div class="flex-1 min-w-0 flex flex-col min-h-[1024px]" data-stitch-vh="min-h-[1024px]===min-h-screen">
+    <header class="sticky top-0 z-20 min-h-16 py-2 border-b border-light-border dark:border-dark-border bg-light-background dark:bg-dark-background px-4 sm:px-6 flex flex-wrap items-center justify-between gap-4">
+      <button type="button" aria-label="Open navigation menu" onclick="document.getElementById(&#39;mobile-nav-drawer&#39;).classList.remove(&#39;hidden&#39;)" class="lg:hidden inline-flex items-center justify-center w-10 h-10 rounded-md bg-light-surface dark:bg-dark-surface border border-light-border dark:border-dark-border hover:border-primary shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"><span class="material-symbols-outlined text-title-md" aria-hidden="true">menu</span></button>
+      <div class="flex items-center gap-3">
+        <h1 class="font-headline text-title-lg" data-design-text-token="title-lg">Create Quick Match</h1>
+        <span class="shrink-0 px-2.5 py-1 rounded-full bg-light-surface dark:bg-dark-surface border border-light-border dark:border-dark-border font-label text-label-sm text-primary" data-design-text-token="label-sm">Instant Publish</span>
+      </div>
+      <div class="flex items-center gap-3 shrink-0">
+        <button data-component-id="button-tertiary" data-component-type="button" data-component-variant="tertiary" type="button" class="shrink-0 inline-flex items-center justify-center px-4 py-2 rounded-md bg-light-surface dark:bg-dark-surface text-light-on-surface dark:text-dark-on-surface border border-light-border dark:border-dark-border font-label text-label-lg transition-colors duration-state-change hover:bg-light-surface-elevated dark:hover:bg-dark-surface-elevated">
+          <span data-design-text-token="label-lg">Save Draft</span>
+        </button>
+        <button data-component-id="button-primary" data-component-type="button" data-component-variant="primary" type="button" class="shrink-0 inline-flex items-center justify-center px-5 py-2 rounded-md bg-primary text-on-primary font-label text-label-lg hover:opacity-90">
+          <span data-design-text-token="label-lg">Publish Match</span>
+        </button>
+      </div>
+    </header>
+
+    <main class="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-page-margin grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+      <!-- Form Sections (8 columns) -->
+      <form class="lg:col-span-8 flex flex-col gap-6">
+        <!-- Section 1: Basic Information -->
+        <section class="rounded-lg bg-light-surface dark:bg-dark-surface border border-light-border dark:border-dark-border p-6 flex flex-col gap-4">
+          <h2 class="font-headline text-title-lg" data-design-text-token="title-lg">1. Basic Information</h2>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <label data-component-id="input-field-text" data-component-type="input-field" data-component-variant="text" class="flex flex-col gap-1.5">
+              <span class="font-label text-label-md" data-design-text-token="label-md">Match Title</span>
+              <input type="text" value="Gazipur Evening Badminton Doubles" class="w-full px-3.5 py-2.5 rounded-md bg-light-background dark:bg-dark-background border border-light-border dark:border-dark-border font-body text-body-md focus:border-primary focus:ring-1 focus:ring-primary">
+            </label>
+            <label class="flex flex-col gap-1.5">
+              <span class="font-label text-label-md" data-design-text-token="label-md">Sport</span>
+              <select class="w-full px-3.5 py-2.5 rounded-md bg-light-background dark:bg-dark-background border border-light-border dark:border-dark-border font-body text-body-md focus:border-primary focus:ring-1 focus:ring-primary">
+                <option selected>Badminton</option>
+                <option>Football 7v7</option>
+                <option>Cricket (Tape-Ball)</option>
+                <option>Basketball 3x3</option>
+              </select>
+            </label>
+          </div>
+          <label class="flex flex-col gap-1.5">
+            <span class="font-label text-label-md" data-design-text-token="label-md">Description &amp; Rules</span>
+            <textarea rows="3" class="w-full px-3.5 py-2.5 rounded-md bg-light-background dark:bg-dark-background border border-light-border dark:border-dark-border font-body text-body-md focus:border-primary focus:ring-1 focus:ring-primary">Friendly doubles session on Court 2. Non-marking shoes required; rotating partners every 2 sets.</textarea>
+          </label>
+        </section>
+
+        <!-- Section 2 & 3: Date, Time & Location -->
+        <section class="rounded-lg bg-light-surface dark:bg-dark-surface border border-light-border dark:border-dark-border p-6 flex flex-col gap-4">
+          <h2 class="font-headline text-title-lg" data-design-text-token="title-lg">2. Schedule &amp; Venue (Asia/Dhaka)</h2>
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <label class="flex flex-col gap-1.5">
+              <span class="font-label text-label-md" data-design-text-token="label-md">Match Date</span>
+              <input type="date" value="2026-11-20" class="w-full px-3.5 py-2.5 rounded-md bg-light-background dark:bg-dark-background border border-light-border dark:border-dark-border font-body text-body-md tabular-nums focus:border-primary">
+            </label>
+            <label class="flex flex-col gap-1.5">
+              <span class="font-label text-label-md" data-design-text-token="label-md">Start Time</span>
+              <input type="time" value="18:00" class="w-full px-3.5 py-2.5 rounded-md bg-light-background dark:bg-dark-background border border-light-border dark:border-dark-border font-body text-body-md tabular-nums focus:border-primary">
+            </label>
+            <label class="flex flex-col gap-1.5">
+              <span class="font-label text-label-md" data-design-text-token="label-md">Duration</span>
+              <select class="w-full px-3.5 py-2.5 rounded-md bg-light-background dark:bg-dark-background border border-light-border dark:border-dark-border font-body text-body-md focus:border-primary">
+                <option>60 mins</option>
+                <option selected>90 mins</option>
+                <option>120 mins</option>
+              </select>
+            </label>
+          </div>
+          <label class="flex flex-col gap-1.5">
+            <span class="font-label text-label-md" data-design-text-token="label-md">Venue or Area</span>
+            <input type="text" value="Gazipur Sadar Indoor Hall, Joydebpur Road" class="w-full px-3.5 py-2.5 rounded-md bg-light-background dark:bg-dark-background border border-light-border dark:border-dark-border font-body text-body-md focus:border-primary">
+          </label>
+        </section>
+
+        <!-- Section 4 & 5: Players & Participation Mode -->
+        <section class="rounded-lg bg-light-surface dark:bg-dark-surface border border-light-border dark:border-dark-border p-6 flex flex-col gap-4">
+          <h2 class="font-headline text-title-lg" data-design-text-token="title-lg">3. Capacity &amp; Participation Mode</h2>
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <label class="flex flex-col gap-1.5">
+              <span class="font-label text-label-md" data-design-text-token="label-md">Min Players</span>
+              <input type="number" value="2" class="w-full px-3.5 py-2.5 rounded-md bg-light-background dark:bg-dark-background border border-light-border dark:border-dark-border font-body text-body-md tabular-nums focus:border-primary">
+            </label>
+            <label class="flex flex-col gap-1.5">
+              <span class="font-label text-label-md" data-design-text-token="label-md">Max Players</span>
+              <input type="number" value="4" class="w-full px-3.5 py-2.5 rounded-md bg-light-background dark:bg-dark-background border border-light-border dark:border-dark-border font-body text-body-md tabular-nums focus:border-primary">
+            </label>
+            <label class="flex flex-col gap-1.5">
+              <span class="font-label text-label-md" data-design-text-token="label-md">Skill Level</span>
+              <select class="w-full px-3.5 py-2.5 rounded-md bg-light-background dark:bg-dark-background border border-light-border dark:border-dark-border font-body text-body-md focus:border-primary">
+                <option>All Levels</option>
+                <option selected>Intermediate</option>
+                <option>Competitive</option>
+              </select>
+            </label>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+            <label class="p-4 rounded-md border-2 border-primary bg-light-surface-elevated dark:bg-dark-surface-elevated flex items-center gap-3 cursor-pointer">
+              <input type="radio" name="joinMode" checked class="text-primary focus:ring-primary">
+              <div>
+                <p class="font-label text-label-lg" data-design-text-token="label-lg">Open Join</p>
+                <p class="font-body text-body-sm text-light-muted dark:text-dark-muted" data-design-text-token="body-sm">Players join immediately while slots are available.</p>
+              </div>
+            </label>
+            <label class="p-4 rounded-md border border-light-border dark:border-dark-border bg-light-background dark:bg-dark-background flex items-center gap-3 cursor-pointer">
+              <input type="radio" name="joinMode" class="text-primary focus:ring-primary">
+              <div>
+                <p class="font-label text-label-lg" data-design-text-token="label-lg">Approval Required</p>
+                <p class="font-body text-body-sm text-light-muted dark:text-dark-muted" data-design-text-token="body-sm">Review player applications before confirming slots.</p>
+              </div>
+            </label>
+          </div>
+        </section>
+
+        <!-- Section 6: Equipment -->
+        <section class="rounded-lg bg-light-surface dark:bg-dark-surface border border-light-border dark:border-dark-border p-6 flex flex-col gap-4">
+          <div class="flex items-center justify-between">
+            <h2 class="font-headline text-title-lg" data-design-text-token="title-lg">4. Equipment Requirements</h2>
+            <button data-component-id="button-add-item" data-component-type="button" data-component-variant="tertiary" type="button" class="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-light-surface-elevated dark:bg-dark-surface-elevated border border-light-border dark:border-dark-border font-label text-label-md">
+              <span class="material-symbols-outlined text-title-md" aria-hidden="true">add</span>
+              <span data-design-text-token="label-md">Add Item</span>
+            </button>
+          </div>
+          <div class="flex flex-col gap-3">
+            <div class="p-3 rounded-md bg-light-surface-elevated dark:bg-dark-surface-elevated border border-light-border dark:border-dark-border flex items-center justify-between gap-4">
+              <span class="font-body text-body-md" data-design-text-token="body-md">Shuttlecock Tubes</span>
+              <div class="flex items-center gap-3">
+                <span class="font-label text-label-md tabular-nums" data-design-text-token="label-md">Qty: 2</span>
+                <button type="button" aria-label="Remove item" class="text-error hover:opacity-80">
+                  <span class="material-symbols-outlined text-title-md" aria-hidden="true">delete</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+      </form>
+
+      <!-- Live Match Preview (4 columns) -->
+      <aside class="lg:col-span-4 sticky top-24 flex flex-col gap-4">
+        <span class="font-label text-label-sm uppercase text-light-muted dark:text-dark-muted" data-design-text-token="label-sm">Live Player Preview</span>
+        <article data-component-id="card-action" data-component-type="card" data-component-variant="action" class="rounded-lg bg-light-surface dark:bg-dark-surface border border-light-border dark:border-dark-border p-5 flex flex-col gap-4">
+          <div class="flex items-center justify-between gap-2">
+            <span class="px-2.5 py-1 rounded-full bg-light-surface-elevated dark:bg-dark-surface-elevated text-primary font-label text-label-sm" data-design-text-token="label-sm">Badminton</span>
+            <span class="px-2.5 py-1 rounded-full bg-success text-on-success font-label text-label-sm" data-design-text-token="label-sm">Open Join</span>
+          </div>
+          <div>
+            <h3 class="font-headline text-title-lg" data-design-text-token="title-lg">Gazipur Evening Badminton Doubles</h3>
+            <p class="font-body text-body-sm text-light-muted dark:text-dark-muted mt-1" data-design-text-token="body-sm">Gazipur Sadar Indoor Hall</p>
+          </div>
+          <div class="flex flex-col gap-1.5 text-body-sm text-light-muted dark:text-dark-muted">
+            <span class="tabular-nums" data-design-text-token="body-sm">Today, 6:00 PM – 7:30 PM</span>
+            <span class="tabular-nums" data-design-text-token="body-sm">1 / 4 players • Intermediate</span>
+          </div>
+          <footer class="pt-3 border-t border-light-border dark:border-dark-border flex items-center justify-between">
+            <span class="font-body text-body-sm text-light-muted dark:text-dark-muted" data-design-text-token="body-sm">Org: Tanvir Hasan</span>
+            <span class="px-4 py-2 rounded-md bg-primary text-on-primary font-label text-label-lg" data-design-text-token="label-lg">Join Match</span>
+          </footer>
+        </article>
+        <p class="font-body text-body-sm text-light-muted dark:text-dark-muted" data-design-text-token="body-sm">
+          Quick Matches go live immediately—no administrator approval required.
+        </p>
+      </aside>
+    </main>
+  </div>
+
+
+
+</body></html>
