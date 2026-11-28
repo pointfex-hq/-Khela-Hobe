@@ -20,12 +20,15 @@ import { childService } from '../../services/endpoints/childService';
 import { useNotifications } from '../../contexts/NotificationContext';
 import { ROUTES } from '../../constants/routes';
 import Button from '../../components/common/Button';
+import Pagination from '../../components/common/Pagination';
 import toast from 'react-hot-toast';
 
 export const PlayerNotificationsPage = () => {
   const { refreshNotifications } = useNotifications();
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [notifications, setNotifications] = useState([]);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
   const [guardianRequests, setGuardianRequests] = useState([]);
   const [respondingId, setRespondingId] = useState(null);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -75,14 +78,18 @@ export const PlayerNotificationsPage = () => {
     { id: 'safety', label: 'Safety & Trust' },
   ];
 
-  const loadNotifications = async () => {
+  const loadNotifications = async (targetPage = page) => {
     setLoading(true);
     try {
       const [res, guardRes] = await Promise.all([
-        notificationService.getNotifications(selectedCategory),
+        notificationService.getNotifications(selectedCategory, {
+          page: targetPage - 1,
+          size: 12,
+        }),
         childService.getIncomingRequests().catch(() => ({ data: [] })),
       ]);
       setNotifications(res.data || []);
+      setTotalPages(res.totalPages || 1);
       setUnreadCount(res.unreadCount || 0);
       setGuardianRequests(guardRes?.data || []);
     } catch (err) {
@@ -106,8 +113,12 @@ export const PlayerNotificationsPage = () => {
   };
 
   useEffect(() => {
-    loadNotifications();
+    setPage(1);
   }, [selectedCategory]);
+
+  useEffect(() => {
+    loadNotifications(page);
+  }, [selectedCategory, page]);
 
   const handleMarkAsRead = async (id) => {
     try {
@@ -441,6 +452,15 @@ export const PlayerNotificationsPage = () => {
           ))
         )}
       </div>
+
+      {!loading && totalPages > 1 && (
+        <Pagination
+          currentPage={page}
+          totalPages={totalPages}
+          onPageChange={setPage}
+          className="pt-2"
+        />
+      )}
     </div>
   );
 };

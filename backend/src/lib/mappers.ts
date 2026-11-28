@@ -233,6 +233,9 @@ export function toMatchDto(m: {
   coverImageUrl: string | null;
   rules: string | null;
   guardianRequired: boolean;
+  genderRestriction?: string | null;
+  minAge?: number;
+  maxAge?: number;
   createdAt: Date;
   updatedAt: Date;
   sport: {
@@ -362,6 +365,9 @@ export function toMatchDto(m: {
     coverImageUrl: m.coverImageUrl ?? null,
     rules: m.rules ?? null,
     guardianRequired: m.guardianRequired,
+    genderRestriction: m.genderRestriction || 'ALL',
+    minAge: typeof m.minAge === 'number' ? m.minAge : 0,
+    maxAge: typeof m.maxAge === 'number' ? m.maxAge : 99,
     createdAt: toEpoch(m.createdAt),
     updatedAt: toEpoch(m.updatedAt),
   };

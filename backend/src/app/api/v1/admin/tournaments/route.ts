@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server';
 import { TournamentStatus } from '@prisma/client';
 import prisma from '@/lib/prisma';
-import { fail, handleRouteError, ok, toEpoch } from '@/lib/http';
+import { fail, handleRouteError, ok, parsePagination, toEpoch, toPageResponse } from '@/lib/http';
 import { verifySession } from '@/lib/auth';
 import { toTournamentDto } from '@/lib/mappers';
 
@@ -15,7 +15,8 @@ export async function GET(request: NextRequest) {
       return fail('ACCESS_DENIED', 'Admin privileges required', 403);
     }
 
-    const { searchParams } = new URL(request.url);
+    const { page, size, skip, searchParams } = parsePagination(request.url, 10);
+    const paginate = searchParams.has('page') || searchParams.has('size');
     const statusParam = searchParams.get('status')?.trim().toUpperCase();
 
     const where: Record<string, unknown> = {};
@@ -27,75 +28,79 @@ export async function GET(request: NextRequest) {
       where.status = statusParam as TournamentStatus;
     }
 
-    const tournaments = await prisma.tournament.findMany({
-      where,
-      orderBy: [{ createdAt: 'desc' }],
-      include: {
-        organizer: { select: { id: true, fullName: true, email: true, profileImageUrl: true } },
-        registrations: {
-          orderBy: { createdAt: 'desc' },
-          select: {
-            id: true,
-            teamName: true,
-            captainName: true,
-            contactPhone: true,
-            status: true,
-            paymentStatus: true,
-            createdAt: true,
+    const [tournaments, total] = await Promise.all([
+      prisma.tournament.findMany({
+        where,
+        ...(paginate ? { skip, take: size } : {}),
+        orderBy: [{ createdAt: 'desc' }],
+        include: {
+          organizer: { select: { id: true, fullName: true, email: true, profileImageUrl: true } },
+          registrations: {
+            orderBy: { createdAt: 'desc' },
+            select: {
+              id: true,
+              teamName: true,
+              captainName: true,
+              contactPhone: true,
+              status: true,
+              paymentStatus: true,
+              createdAt: true,
+            },
+          },
+          interests: { select: { userId: true } },
+          tickets: {
+            orderBy: { createdAt: 'desc' },
+            select: {
+              id: true,
+              ticketCode: true,
+              tierName: true,
+              finalPrice: true,
+              attendeeName: true,
+              paymentStatus: true,
+              status: true,
+              checkedInAt: true,
+              createdAt: true,
+            },
           },
         },
-        interests: { select: { userId: true } },
-        tickets: {
-          orderBy: { createdAt: 'desc' },
-          select: {
-            id: true,
-            ticketCode: true,
-            tierName: true,
-            finalPrice: true,
-            attendeeName: true,
-            paymentStatus: true,
-            status: true,
-            checkedInAt: true,
-            createdAt: true,
-          },
-        },
-      },
+      }),
+      paginate ? prisma.tournament.count({ where }) : Promise.resolve(0),
+    ]);
+
+    const dtos = tournaments.map((t) => {
+      const activeTickets = t.tickets.filter((tk) => tk.status !== 'CANCELLED');
+      const usedTickets = activeTickets.filter((tk) => tk.status === 'USED');
+      const ticketRevenue = activeTickets.reduce((sum, tk) => sum + (tk.finalPrice || 0), 0);
+
+      return {
+        ...toTournamentDto(t),
+        organizerEmail: t.organizer?.email ?? null,
+        ticketRevenue,
+        checkedInTickets: usedTickets.length,
+        recentTickets: t.tickets.slice(0, 20).map((tk) => ({
+          id: tk.id,
+          ticketCode: tk.ticketCode,
+          tierName: tk.tierName,
+          finalPrice: tk.finalPrice,
+          attendeeName: tk.attendeeName,
+          paymentStatus: tk.paymentStatus,
+          status: tk.status,
+          checkedInAt: toEpoch(tk.checkedInAt),
+          createdAt: toEpoch(tk.createdAt),
+        })),
+        recentRegistrations: t.registrations.map((r) => ({
+          id: r.id,
+          teamName: r.teamName,
+          captainName: r.captainName,
+          phone: r.contactPhone,
+          status: r.status,
+          paymentStatus: r.paymentStatus,
+          createdAt: toEpoch(r.createdAt),
+        })),
+      };
     });
 
-    return ok(
-      tournaments.map((t) => {
-        const activeTickets = t.tickets.filter((tk) => tk.status !== 'CANCELLED');
-        const usedTickets = activeTickets.filter((tk) => tk.status === 'USED');
-        const ticketRevenue = activeTickets.reduce((sum, tk) => sum + (tk.finalPrice || 0), 0);
-
-        return {
-          ...toTournamentDto(t),
-          organizerEmail: t.organizer?.email ?? null,
-          ticketRevenue,
-          checkedInTickets: usedTickets.length,
-          recentTickets: t.tickets.slice(0, 20).map((tk) => ({
-            id: tk.id,
-            ticketCode: tk.ticketCode,
-            tierName: tk.tierName,
-            finalPrice: tk.finalPrice,
-            attendeeName: tk.attendeeName,
-            paymentStatus: tk.paymentStatus,
-            status: tk.status,
-            checkedInAt: toEpoch(tk.checkedInAt),
-            createdAt: toEpoch(tk.createdAt),
-          })),
-          recentRegistrations: t.registrations.map((r) => ({
-            id: r.id,
-            teamName: r.teamName,
-            captainName: r.captainName,
-            phone: r.contactPhone,
-            status: r.status,
-            paymentStatus: r.paymentStatus,
-            createdAt: toEpoch(r.createdAt),
-          })),
-        };
-      })
-    );
+    return ok(paginate ? toPageResponse(dtos, page, size, total) : dtos);
   } catch (error) {
     return handleRouteError(error);
   }

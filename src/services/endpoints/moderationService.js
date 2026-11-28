@@ -7,7 +7,8 @@ export const moderationService = {
       includeCancelled: true,
       sport: filters.sport,
       search: filters.search,
-      size: 50,
+      page: filters.page ?? 0,
+      size: filters.size ?? 12,
     });
     const list = (res.data || []).map((m) => ({
       id: m.id,
@@ -24,7 +25,13 @@ export const moderationService = {
       rosterCount: `${m.filledSlots} / ${m.totalSlots}`,
     }));
 
-    return { success: true, data: list, total: list.length };
+    return {
+      success: true,
+      data: list,
+      total: res.total ?? list.length,
+      page: res.page ?? 0,
+      totalPages: res.totalPages ?? 1,
+    };
   },
 
   moderateMatch: async (id, payload) => {

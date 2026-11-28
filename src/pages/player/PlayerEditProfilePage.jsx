@@ -67,6 +67,8 @@ export const PlayerEditProfilePage = () => {
       phoneNumber: '',
       city: 'Dhaka',
       area: '',
+      age: '',
+      gender: '',
       bio: '',
     },
   });
@@ -90,6 +92,8 @@ export const PlayerEditProfilePage = () => {
             phoneNumber: d.phoneNumber || d.phone || '',
             city: d.city || 'Dhaka',
             area: d.area || '',
+            age: typeof d.age === 'number' ? String(d.age) : '',
+            gender: d.gender || '',
             bio: d.bio || '',
           });
           setAvatarUrl(d.avatar || '');
@@ -207,6 +211,8 @@ export const PlayerEditProfilePage = () => {
         phoneNumber: formData.phoneNumber,
         city: formData.city || 'Dhaka',
         area: formData.area,
+        age: formData.age ? parseInt(String(formData.age), 10) : null,
+        gender: formData.gender || null,
         bio: formData.bio,
         primarySkillLevel: primarySport?.skillLevel || undefined,
         sportsPreferences: orderedSports.map((sp) => ({
@@ -408,6 +414,41 @@ export const PlayerEditProfilePage = () => {
               </select>
               <span className="font-body text-body-sm text-light-muted dark:text-dark-muted">
                 All Bangladesh divisions and Admin-configured zones are supported.
+              </span>
+            </label>
+
+            <label className="flex flex-col gap-1.5">
+              <span className="font-label text-label-md font-semibold">Age (Years)</span>
+              <input
+                type="number"
+                min="8"
+                max="100"
+                {...register('age', {
+                  min: { value: 8, message: 'Age must be at least 8' },
+                  max: { value: 100, message: 'Age must be 100 or below' },
+                })}
+                placeholder="e.g. 22"
+                className="w-full px-3.5 py-2.5 rounded-md bg-light-background dark:bg-dark-background border border-light-border dark:border-dark-border font-body text-body-md tabular-nums focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none"
+              />
+              {errors.age && <span className="text-error text-xs">{errors.age.message}</span>}
+              <span className="font-body text-body-sm text-light-muted dark:text-dark-muted">
+                Used to match you with age-specific fixtures.
+              </span>
+            </label>
+
+            <label className="flex flex-col gap-1.5">
+              <span className="font-label text-label-md font-semibold">Gender</span>
+              <select
+                {...register('gender')}
+                className="w-full px-3.5 py-2.5 rounded-md bg-light-background dark:bg-dark-background border border-light-border dark:border-dark-border font-body text-body-md focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none"
+              >
+                <option value="">Select Gender</option>
+                <option value="MALE">Boy / Male</option>
+                <option value="FEMALE">Girl / Female</option>
+                <option value="OTHER">Other</option>
+              </select>
+              <span className="font-body text-body-sm text-light-muted dark:text-dark-muted">
+                Required to view and join Boys Only or Girls Only matches.
               </span>
             </label>
           </div>

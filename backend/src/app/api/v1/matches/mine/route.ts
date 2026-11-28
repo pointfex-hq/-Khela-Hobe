@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server';
 import { MatchStatus } from '@prisma/client';
 import prisma from '@/lib/prisma';
-import { fail, handleRouteError, ok } from '@/lib/http';
+import { fail, handleRouteError, ok, parsePagination, toPageResponse } from '@/lib/http';
 import { verifySession } from '@/lib/auth';
 import { toMatchDto } from '@/lib/mappers';
 
@@ -12,7 +12,8 @@ export async function GET(request: NextRequest) {
       return fail('UNAUTHORIZED', 'Authentication required', 401);
     }
 
-    const { searchParams } = new URL(request.url);
+    const { page, size, skip, searchParams } = parsePagination(request.url, 12);
+    const paginate = searchParams.has('page') || searchParams.has('size');
     const statusParam = searchParams.get('status')?.trim().toUpperCase();
     const q = searchParams.get('q')?.trim();
 
@@ -37,9 +38,10 @@ export async function GET(request: NextRequest) {
       ];
     }
 
-    const [matches, allOrganizerStatuses] = await Promise.all([
+    const [matches, total, allOrganizerStatuses] = await Promise.all([
       prisma.match.findMany({
         where,
+        ...(paginate ? { skip, take: size } : {}),
         orderBy: [{ startTime: 'desc' }, { createdAt: 'desc' }],
         include: {
           sport: true,
@@ -56,6 +58,7 @@ export async function GET(request: NextRequest) {
           },
         },
       }),
+      prisma.match.count({ where }),
       prisma.match.groupBy({
         by: ['status'],
         where: { organizerId: session.userId },
@@ -80,8 +83,7 @@ export async function GET(request: NextRequest) {
     const content = matches.map(toMatchDto);
 
     return ok({
-      content,
-      totalElements: content.length,
+      ...toPageResponse(content, paginate ? page : 0, paginate ? size : Math.max(1, content.length), total),
       counts,
     });
   } catch (error) {

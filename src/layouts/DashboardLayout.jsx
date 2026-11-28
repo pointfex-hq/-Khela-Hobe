@@ -91,7 +91,9 @@ export const DashboardLayout = () => {
         return [
           { label: 'Home', to: ROUTES.PLAYER_DASHBOARD, icon: faHouse },
           { label: 'Explore', to: ROUTES.PLAYER_EXPLORE, icon: faCompass },
-          { label: 'Create', to: ROUTES.CREATE_QUICK_MATCH, icon: faPlus, isPrimaryAction: true },
+          ...(user?.quickMatchHostEnabled
+            ? [{ label: 'Create', to: ROUTES.CREATE_QUICK_MATCH, icon: faPlus, isPrimaryAction: true }]
+            : [{ label: 'Events', to: ROUTES.TOURNAMENTS, icon: faTrophy }]),
           { label: 'Matches', to: ROUTES.PLAYER_MATCHES, icon: faCalendarCheck },
           { label: 'Profile', to: ROUTES.PLAYER_PROFILE, icon: faUser },
         ];

@@ -7,6 +7,7 @@ import { getEnrichedUserProfile, verifySession } from '@/lib/auth';
 import { CACHE_KEYS, cacheGet, cacheSet, invalidateUserCache } from '@/lib/cache';
 import { recordAuditLog } from '@/lib/audit';
 import { deleteUserAccountSafely } from '@/lib/userDeletion';
+import { computeAgeFromDob, normalizeGender } from '@/lib/eligibility';
 
 const sportPrefSchema = z.object({
   sportId: z.string().trim().min(1),
@@ -24,6 +25,8 @@ const updateMeSchema = z.object({
   city: z.string().trim().max(100).optional().nullable(),
   area: z.string().trim().max(100).optional().nullable(),
   dateOfBirth: z.string().optional().nullable(),
+  age: z.number().int().min(8).max(100).optional().nullable(),
+  gender: z.enum(['MALE', 'FEMALE', 'OTHER', 'male', 'female', 'other']).optional().nullable(),
   primarySkillLevel: z
     .enum(['BEGINNER', 'INTERMEDIATE', 'ADVANCED', 'EXPERT', 'PROFESSIONAL'])
     .optional(),
@@ -155,6 +158,14 @@ export async function PATCH(request: NextRequest) {
 
     const dob = parsed.dateOfBirth ? new Date(parsed.dateOfBirth) : undefined;
     const validDob = dob && !Number.isNaN(dob.getTime()) ? dob : undefined;
+    const normalizedGender =
+      parsed.gender !== undefined ? normalizeGender(parsed.gender) : undefined;
+    const computedAge =
+      parsed.age !== undefined
+        ? parsed.age
+        : validDob
+          ? computeAgeFromDob(validDob)
+          : undefined;
 
     if (user.playerProfile) {
       await prisma.playerProfile.update({
@@ -168,6 +179,8 @@ export async function PATCH(request: NextRequest) {
             ? { skillLevel: parsed.primarySkillLevel }
             : {}),
           ...(validDob ? { dateOfBirth: validDob } : {}),
+          ...(computedAge !== undefined ? { age: computedAge } : {}),
+          ...(normalizedGender !== undefined ? { gender: normalizedGender } : {}),
         },
       });
     } else {
@@ -180,6 +193,8 @@ export async function PATCH(request: NextRequest) {
           area: user.area,
           skillLevel: user.primarySkillLevel || 'INTERMEDIATE',
           ...(validDob ? { dateOfBirth: validDob } : {}),
+          ...(computedAge !== undefined ? { age: computedAge } : {}),
+          ...(normalizedGender !== undefined ? { gender: normalizedGender } : {}),
           safetyProfile: {
             create: { safetyId: `KH-${user.id.slice(-8).toUpperCase()}` },
           },

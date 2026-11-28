@@ -4,6 +4,7 @@ import { NextRequest } from 'next/server';
 import prisma from './prisma';
 import { toEpoch } from './http';
 import { CACHE_KEYS, cacheGet, cacheSet } from './cache';
+import { normalizeGender, resolveProfileAge } from './eligibility';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'super-secret-jwt-key-change-in-production-123456789';
 export const ACCESS_TOKEN_TTL_SECONDS = 86400; // 24 hours
@@ -192,6 +193,9 @@ export function toUserDto(user: {
     city?: string | null;
     area?: string | null;
     skillLevel?: string | null;
+    gender?: string | null;
+    age?: number | null;
+    dateOfBirth?: Date | null;
     safetyProfile?: { safetyId: string } | null;
   } | null;
 }) {
@@ -217,6 +221,9 @@ export function toUserDto(user: {
     bio: user.bio ?? user.playerProfile?.bio ?? null,
     city: user.city ?? user.playerProfile?.city ?? null,
     area: user.area ?? user.playerProfile?.area ?? null,
+    gender: normalizeGender(user.playerProfile?.gender),
+    age: resolveProfileAge(user.playerProfile),
+    dateOfBirth: user.playerProfile?.dateOfBirth ? toEpoch(user.playerProfile.dateOfBirth) : null,
     safetyId: user.playerProfile?.safetyProfile?.safetyId ?? `KH-${user.id.slice(-8).toUpperCase()}`,
     roles,
     primarySkillLevel: user.primarySkillLevel ?? user.playerProfile?.skillLevel ?? null,

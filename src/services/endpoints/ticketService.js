@@ -16,13 +16,16 @@ export const ticketService = {
     };
   },
 
-  getMyTickets: async () => {
-    const response = await apiClient.get('/tickets/my');
-    const list = unwrapEnvelope(response);
+  getMyTickets: async (params = {}) => {
+    const response = await apiClient.get('/tickets/my', { params });
+    const raw = unwrapEnvelope(response);
+    const items = Array.isArray(raw?.content) ? raw.content : Array.isArray(raw) ? raw : [];
     return {
       success: true,
-      data: Array.isArray(list) ? list : [],
-      total: Array.isArray(list) ? list.length : 0,
+      data: items,
+      total: raw?.totalElements ?? items.length,
+      page: raw?.page ?? 0,
+      totalPages: raw?.totalPages ?? 1,
     };
   },
 

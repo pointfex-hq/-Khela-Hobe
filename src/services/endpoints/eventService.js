@@ -4,18 +4,30 @@ import { unwrapEnvelope } from '../../utils/dtoMappers';
 export const eventService = {
   getPublicEvents: async (params = {}) => {
     const response = await apiClient.get('/events', { params });
-    const list = unwrapEnvelope(response);
-    const items = Array.isArray(list?.content) ? list.content : Array.isArray(list) ? list : [];
-    return { success: true, data: items, total: items.length };
+    const raw = unwrapEnvelope(response);
+    const items = Array.isArray(raw?.content) ? raw.content : Array.isArray(raw) ? raw : [];
+    return {
+      success: true,
+      data: items,
+      total: raw?.totalElements ?? items.length,
+      page: raw?.page ?? 0,
+      totalPages: raw?.totalPages ?? 1,
+    };
   },
 
-  getOrganizerEvents: async (statusFilter = 'all') => {
+  getOrganizerEvents: async (statusFilter = 'all', params = {}) => {
     const response = await apiClient.get('/events/organizer', {
-      params: { status: statusFilter },
+      params: { status: statusFilter, ...params },
     });
-    const list = unwrapEnvelope(response);
-    const items = Array.isArray(list?.content) ? list.content : Array.isArray(list) ? list : [];
-    return { success: true, data: items, total: items.length };
+    const raw = unwrapEnvelope(response);
+    const items = Array.isArray(raw?.content) ? raw.content : Array.isArray(raw) ? raw : [];
+    return {
+      success: true,
+      data: items,
+      total: raw?.totalElements ?? items.length,
+      page: raw?.page ?? 0,
+      totalPages: raw?.totalPages ?? 1,
+    };
   },
 
   getEventDetails: async (id) => {
@@ -60,10 +72,17 @@ export const eventService = {
     };
   },
 
-  getAdminTournaments: async (status = 'ALL') => {
-    const response = await apiClient.get('/admin/tournaments', { params: { status } });
-    const list = unwrapEnvelope(response);
-    return { success: true, data: Array.isArray(list) ? list : [] };
+  getAdminTournaments: async (status = 'ALL', params = {}) => {
+    const response = await apiClient.get('/admin/tournaments', { params: { status, ...params } });
+    const raw = unwrapEnvelope(response);
+    const items = Array.isArray(raw?.content) ? raw.content : Array.isArray(raw) ? raw : [];
+    return {
+      success: true,
+      data: items,
+      total: raw?.totalElements ?? items.length,
+      page: raw?.page ?? 0,
+      totalPages: raw?.totalPages ?? 1,
+    };
   },
 
   moderateTournament: async (id, action, note = '') => {

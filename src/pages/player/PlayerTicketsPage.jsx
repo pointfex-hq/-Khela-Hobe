@@ -29,6 +29,7 @@ import LoadingSpinner from '../../components/feedback/LoadingSpinner';
 import Modal from '../../components/modals/Modal';
 import ConfirmationDialog from '../../components/feedback/ConfirmationDialog';
 import QrCodeCanvas from '../../components/common/QrCodeCanvas';
+import Pagination from '../../components/common/Pagination';
 import { downloadTicketPassPdf } from '../../utils/ticketPdfGenerator';
 
 export const PlayerTicketsPage = () => {
@@ -36,6 +37,8 @@ export const PlayerTicketsPage = () => {
   const [tickets, setTickets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('upcoming'); // 'all', 'upcoming', 'used', 'cancelled'
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
 
   // Modal & Dialog state
   const [selectedTicket, setSelectedTicket] = useState(null);
@@ -46,12 +49,16 @@ export const PlayerTicketsPage = () => {
     ticketTitle: '',
   });
 
-  const fetchTickets = async () => {
+  const fetchTickets = async (targetPage = page) => {
     setLoading(true);
     try {
-      const res = await ticketService.getMyTickets();
+      const res = await ticketService.getMyTickets({
+        page: targetPage - 1,
+        size: 6,
+      });
       if (res.success) {
         setTickets(res.data || []);
+        setTotalPages(res.totalPages || 1);
       }
     } catch (err) {
       console.error('Failed to load tickets', err);
@@ -61,8 +68,8 @@ export const PlayerTicketsPage = () => {
   };
 
   useEffect(() => {
-    fetchTickets();
-  }, []);
+    fetchTickets(page);
+  }, [page]);
 
   const handleDownload = async (ticket) => {
     try {
@@ -369,6 +376,15 @@ export const PlayerTicketsPage = () => {
           description="You don't have any event passes in this category. Explore upcoming tournaments and book your tickets."
           actionText="Browse Upcoming Events"
           onAction={() => navigate(ROUTES.EXPLORE_MATCHES)}
+        />
+      )}
+
+      {!loading && totalPages > 1 && (
+        <Pagination
+          currentPage={page}
+          totalPages={totalPages}
+          onPageChange={setPage}
+          className="pt-2"
         />
       )}
 

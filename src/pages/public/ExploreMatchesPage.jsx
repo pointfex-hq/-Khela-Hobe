@@ -10,11 +10,18 @@ import {
   faLocationCrosshairs,
 } from '@fortawesome/free-solid-svg-icons';
 import { matchService } from '../../services/endpoints/matchService';
+import { useAuth } from '../../hooks/useAuth';
 import { useAppStore } from '../../store/useAppStore';
 import { haversineDistanceKm } from '../../utils/formatters';
+import {
+  isUserEligibleForMatch,
+  formatMatchGenderLabel,
+  formatMatchAgeLabel,
+} from '../../utils/matchEligibility';
 import { ROUTES } from '../../constants/routes';
 import MapView from '../../components/common/MapView';
 import Button from '../../components/common/Button';
+import Pagination from '../../components/common/Pagination';
 import toast from 'react-hot-toast';
 
 export const ExploreMatchesPage = () => {
@@ -42,9 +49,10 @@ export const ExploreMatchesPage = () => {
     selectedAvailability !== 'Open Slots Only',
   ].filter(Boolean).length;
 
-  const rawMatches = useAppStore((s) => s.matches);
-  const loading = useAppStore((s) => s.matchesLoading);
-  const fetchMatches = useAppStore((s) => s.fetchMatches);
+  const { user } = useAuth();
+  const storeMatches = useAppStore((s) => s.matches);
+  const storeLoading = useAppStore((s) => s.matchesLoading);
+  const fetchStoreMatches = useAppStore((s) => s.fetchMatches);
   const sportsCatalog = useAppStore((s) => s.sports);
   const fetchSports = useAppStore((s) => s.fetchSports);
   const zonesCatalog = useAppStore((s) => s.zones);
@@ -52,9 +60,13 @@ export const ExploreMatchesPage = () => {
   const userLocation = useAppStore((s) => s.userLocation);
   const detectUserLocation = useAppStore((s) => s.detectUserLocation);
 
-  // Pagination
+  // Server-side Pagination for Grid mode (prevents loading large match datasets at once)
   const [page, setPage] = useState(1);
-  const itemsPerPage = 6;
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalMatchesCount, setTotalMatchesCount] = useState(0);
+  const [gridMatches, setGridMatches] = useState([]);
+  const [gridLoading, setGridLoading] = useState(true);
+  const itemsPerPage = 8;
 
   // Sync search input when navigated from DashboardLayout top search bar
   useEffect(() => {
@@ -64,18 +76,83 @@ export const ExploreMatchesPage = () => {
     }
   }, [searchParams]);
 
-  // Fetch cached matches, sports, and Bangladesh zones once on mount + detect user GPS area
+  // Reset to page 1 when filters change
   useEffect(() => {
-    fetchMatches();
+    setPage(1);
+  }, [selectedSport, selectedLocation, selectedDate, selectedSkill, selectedAvailability, searchQuery]);
+
+  // Fetch sports, locations & GPS once on mount
+  useEffect(() => {
     fetchSports();
     fetchLocations();
     detectUserLocation();
-  }, [fetchMatches, fetchSports, fetchLocations, detectUserLocation]);
+  }, [fetchSports, fetchLocations, detectUserLocation]);
 
-  // Client-side filter & sort over already-fetched Zustand match pool (no DB queries on search/sort)
+  const loadPagedMatches = async (targetPage = page) => {
+    setGridLoading(true);
+    try {
+      const matchedSportObj = (sportsCatalog || []).find(
+        (s) => s.name?.toLowerCase() === selectedSport?.toLowerCase()
+      );
+      const res = await matchService.getMatches({
+        page: targetPage - 1,
+        size: itemsPerPage,
+        status: 'ACTIVE',
+        ...(matchedSportObj ? { sportId: matchedSportObj.id } : {}),
+        ...(selectedSport !== 'All Sports' && !matchedSportObj ? { sport: selectedSport } : {}),
+        ...(selectedLocation !== 'All Bangladesh' ? { location: selectedLocation, city: selectedLocation } : {}),
+        ...(selectedSkill !== 'Any Level' ? { skillLevel: selectedSkill } : {}),
+        ...(selectedDate ? { date: selectedDate } : {}),
+        ...(selectedAvailability ? { availability: selectedAvailability } : {}),
+        ...(searchQuery.trim() ? { search: searchQuery.trim() } : {}),
+      });
+      setGridMatches(res.data || []);
+      setTotalPages(res.totalPages || 1);
+      setTotalMatchesCount(res.total ?? (res.data?.length || 0));
+    } catch {
+      toast.error('Failed to load matches.');
+    } finally {
+      setGridLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (viewMode === 'grid') {
+      loadPagedMatches(page);
+    } else {
+      fetchStoreMatches({ force: false });
+    }
+  }, [
+    viewMode,
+    page,
+    selectedSport,
+    selectedLocation,
+    selectedDate,
+    selectedSkill,
+    selectedAvailability,
+    searchQuery,
+    user?.id,
+    user?.gender,
+    user?.age,
+  ]);
+
+  const loading = viewMode === 'map' ? storeLoading : gridLoading;
+  const fetchMatches = async ({ force = false } = {}) => {
+    if (viewMode === 'map') {
+      return fetchStoreMatches({ force });
+    }
+    return loadPagedMatches(page);
+  };
+
   const matches = useMemo(() => {
-    const enriched = (rawMatches || [])
-      .filter((m) => m.state !== 'cancelled' && m.status !== 'CANCELLED')
+    const sourceList = viewMode === 'map' ? storeMatches || [] : gridMatches || [];
+    const enriched = sourceList
+      .filter(
+        (m) =>
+          m.state !== 'cancelled' &&
+          m.status !== 'CANCELLED' &&
+          isUserEligibleForMatch(user, m).eligible
+      )
       .map((m) => {
         const dist =
           userLocation?.lat && userLocation?.lng
@@ -89,55 +166,7 @@ export const ExploreMatchesPage = () => {
         return { ...m, distanceKm: dist };
       });
 
-    let results = enriched;
-
-    if (selectedSport && selectedSport !== 'All Sports') {
-      const sportLower = selectedSport.toLowerCase();
-      results = results.filter(
-        (m) =>
-          m.sport?.toLowerCase().includes(sportLower) ||
-          m.sportCategory?.toLowerCase().includes(sportLower)
-      );
-    }
-
-    if (selectedLocation && selectedLocation !== 'All Bangladesh') {
-      const loc = selectedLocation.toLowerCase();
-      results = results.filter(
-        (m) =>
-          m.area?.toLowerCase().includes(loc) ||
-          m.city?.toLowerCase().includes(loc) ||
-          m.venue?.toLowerCase().includes(loc)
-      );
-    }
-
-    if (selectedDate) {
-      results = results.filter((m) => m.date === selectedDate);
-    }
-
-    if (selectedSkill && selectedSkill !== 'Any Level') {
-      results = results.filter(
-        (m) => m.skillLevel?.toLowerCase() === selectedSkill.toLowerCase()
-      );
-    }
-
-    if (selectedAvailability === 'Open Slots Only') {
-      results = results.filter((m) => m.totalSlots > m.filledSlots && m.joinMode !== 'Match Full');
-    }
-
-    if (searchQuery.trim()) {
-      const q = searchQuery.trim().toLowerCase();
-      results = results.filter(
-        (m) =>
-          m.title?.toLowerCase().includes(q) ||
-          m.venue?.toLowerCase().includes(q) ||
-          m.area?.toLowerCase().includes(q) ||
-          m.city?.toLowerCase().includes(q) ||
-          m.sport?.toLowerCase().includes(q) ||
-          m.organizer?.name?.toLowerCase().includes(q)
-      );
-    }
-
-    const sorted = [...results];
+    const sorted = [...enriched];
     if (selectedSort === 'Nearest') {
       sorted.sort((a, b) => {
         if (a.distanceKm !== null && b.distanceKm !== null) {
@@ -154,17 +183,7 @@ export const ExploreMatchesPage = () => {
     }
 
     return sorted;
-  }, [
-    rawMatches,
-    userLocation,
-    selectedSport,
-    selectedLocation,
-    selectedDate,
-    selectedSkill,
-    selectedAvailability,
-    searchQuery,
-    selectedSort,
-  ]);
+  }, [viewMode, storeMatches, gridMatches, userLocation, selectedSort, user]);
 
   const handleResetFilters = () => {
     setSearchQuery('');
@@ -190,9 +209,7 @@ export const ExploreMatchesPage = () => {
     }
   };
 
-  const paginatedMatches = useMemo(() => {
-    return matches.slice(0, page * itemsPerPage);
-  }, [matches, page]);
+  const paginatedMatches = matches;
 
   return (
     <div className="flex flex-col gap-6">
@@ -203,9 +220,18 @@ export const ExploreMatchesPage = () => {
             Explore Matches
           </h1>
           <p className="font-body text-xs sm:text-body-md text-light-muted dark:text-dark-muted mt-1 tabular-nums">
-            Showing {matches.length} active match{matches.length === 1 ? '' : 'es'}
+            Showing {viewMode === 'grid' ? `${matches.length} of ${totalMatchesCount}` : matches.length} eligible active match{(viewMode === 'grid' ? totalMatchesCount : matches.length) === 1 ? '' : 'es'}
             {userLocation ? ' • Sorted nearest your location first' : ''}
           </p>
+          {user && (!user.age || !user.gender) && (
+            <p className="font-body text-xs text-warning mt-1">
+              Update your <strong>Age</strong> &amp; <strong>Gender</strong> in{' '}
+              <Link to={ROUTES.PLAYER_PROFILE_EDIT} className="underline font-semibold">
+                My Profile
+              </Link>{' '}
+              to see Boys/Girls Only &amp; age-restricted matches.
+            </p>
+          )}
         </div>
 
         <div className="flex flex-wrap items-center gap-2 sm:gap-3">
@@ -466,9 +492,21 @@ export const ExploreMatchesPage = () => {
                   >
                     <div className="flex flex-col gap-3">
                       <div className="flex items-center justify-between gap-2">
-                        <span className="px-2.5 py-1 rounded-full bg-light-surface-elevated dark:bg-dark-surface-elevated text-primary font-label text-label-sm font-semibold">
-                          {match.sport}
-                        </span>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span className="px-2.5 py-1 rounded-full bg-light-surface-elevated dark:bg-dark-surface-elevated text-primary font-label text-label-sm font-semibold">
+                            {match.sport}
+                          </span>
+                          {match.genderRestriction && match.genderRestriction !== 'ALL' && (
+                            <span className="px-2 py-0.5 rounded-full bg-secondary/15 text-secondary font-label text-[11px] font-semibold">
+                              {formatMatchGenderLabel(match.genderRestriction)}
+                            </span>
+                          )}
+                          {(match.minAge > 0 || match.maxAge < 99) && (
+                            <span className="px-2 py-0.5 rounded-full bg-primary/15 text-primary font-label text-[11px] font-semibold tabular-nums">
+                              {formatMatchAgeLabel(match.minAge, match.maxAge)}
+                            </span>
+                          )}
+                        </div>
                         <span
                           className={`px-2.5 py-0.5 rounded-full font-label text-label-sm font-bold ${
                             isFull
@@ -530,17 +568,14 @@ export const ExploreMatchesPage = () => {
             </div>
           )}
 
-          {/* Load More Pagination */}
-          {matches.length > paginatedMatches.length && (
-            <div className="flex justify-center pt-4">
-              <Button
-                variant="tertiary"
-                size="md"
-                onClick={() => setPage((p) => p + 1)}
-              >
-                Load More Matches ({matches.length - paginatedMatches.length} remaining)
-              </Button>
-            </div>
+          {/* Server-Side Pagination */}
+          {totalPages > 1 && (
+            <Pagination
+              currentPage={page}
+              totalPages={totalPages}
+              onPageChange={setPage}
+              className="pt-4"
+            />
           )}
         </div>
       )}

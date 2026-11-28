@@ -28,6 +28,7 @@ import LoadingSpinner from '../../components/feedback/LoadingSpinner';
 import DeleteAccountCard from '../../components/auth/DeleteAccountCard';
 import { toastService } from '../../components/feedback/toastService';
 import { formatDateTimeDhaka } from '../../utils/formatters';
+import { formatProfileGenderLabel } from '../../utils/matchEligibility';
 
 export const PlayerProfilePage = () => {
   const { playerId } = useParams();
@@ -204,7 +205,31 @@ export const PlayerProfilePage = () => {
                   <span className="tabular-nums">{profile.phoneNumber}</span>
                 </span>
               )}
+              {typeof profile?.age === 'number' && (
+                <span className="inline-flex items-center px-2.5 py-0.5 rounded-md bg-light-surface-elevated dark:bg-dark-surface-elevated border border-light-border dark:border-dark-border text-xs font-label font-semibold tabular-nums">
+                  {profile.age} yrs
+                </span>
+              )}
+              {profile?.gender && (
+                <span className="inline-flex items-center px-2.5 py-0.5 rounded-md bg-light-surface-elevated dark:bg-dark-surface-elevated border border-light-border dark:border-dark-border text-xs font-label font-semibold">
+                  {formatProfileGenderLabel(profile.gender)}
+                </span>
+              )}
             </div>
+
+            {!isPublicView && (!profile?.age || !profile?.gender) && (
+              <div className="mt-1 px-3 py-2 rounded-md bg-warning/10 border border-warning/30 text-xs text-warning flex flex-wrap items-center justify-between gap-2">
+                <span>
+                  Add your <strong>Age</strong> &amp; <strong>Gender</strong> in your profile to unlock age-range and Boys Only / Girls Only match discovery.
+                </span>
+                <Link
+                  to={ROUTES.PLAYER_PROFILE_EDIT}
+                  className="font-label font-bold underline hover:opacity-80 shrink-0"
+                >
+                  Update Now
+                </Link>
+              </div>
+            )}
 
             <div className="flex flex-wrap items-center gap-2 mt-1">
               <span className="inline-flex items-center gap-2 px-3 py-1 rounded-md bg-secondary/10 border border-secondary/30 text-xs font-mono font-semibold text-light-on-surface dark:text-dark-on-surface break-all max-w-full">

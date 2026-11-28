@@ -11,6 +11,7 @@ import {
 import Badge from '../common/Badge';
 import Button from '../common/Button';
 import { formatCurrencyBDT } from '../../utils/formatters';
+import { formatMatchGenderLabel, formatMatchAgeLabel } from '../../utils/matchEligibility';
 
 export const MatchCard = ({ match, onJoin, isJoining = false }) => {
   const {
@@ -87,6 +88,20 @@ export const MatchCard = ({ match, onJoin, isJoining = false }) => {
               <FontAwesomeIcon icon={faUsers} className="w-3.5 text-primary shrink-0" />
               <span className="tabular-nums">{filledSlots} / {totalSlots} players confirmed</span>
             </div>
+            {(match.genderRestriction !== 'ALL' || match.minAge > 0 || match.maxAge < 99) && (
+              <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                {match.genderRestriction && match.genderRestriction !== 'ALL' && (
+                  <span className="px-2 py-0.5 rounded-full bg-secondary/15 text-secondary font-label text-[11px] font-semibold">
+                    {formatMatchGenderLabel(match.genderRestriction)}
+                  </span>
+                )}
+                {(match.minAge > 0 || match.maxAge < 99) && (
+                  <span className="px-2 py-0.5 rounded-full bg-primary/15 text-primary font-label text-[11px] font-semibold tabular-nums">
+                    {formatMatchAgeLabel(match.minAge, match.maxAge)}
+                  </span>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>

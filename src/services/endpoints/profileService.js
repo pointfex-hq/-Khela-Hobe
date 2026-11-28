@@ -26,6 +26,15 @@ function buildUpdateProfilePayload(payload = {}) {
   if (payload.dateOfBirth !== undefined && payload.dateOfBirth) {
     dto.dateOfBirth = payload.dateOfBirth;
   }
+  if (payload.age !== undefined && payload.age !== null && payload.age !== '') {
+    const parsedAge = parseInt(String(payload.age), 10);
+    if (Number.isFinite(parsedAge) && parsedAge >= 8 && parsedAge <= 100) {
+      dto.age = parsedAge;
+    }
+  }
+  if (payload.gender !== undefined && payload.gender !== null && String(payload.gender).trim()) {
+    dto.gender = String(payload.gender).trim().toUpperCase();
+  }
 
   const skill = payload.primarySkillLevel ?? payload.skillLevel;
   if (skill) {
@@ -68,6 +77,9 @@ export const profileService = {
     const response = await apiClient.patch('/users/me', dto);
     const normalized = normalizeUser(unwrapEnvelope(response));
     if (normalized) useAppStore.getState().setCachedUser(normalized);
+    if (dto.age !== undefined || dto.gender !== undefined || dto.dateOfBirth !== undefined) {
+      useAppStore.getState().invalidateMatches({ refetch: true }).catch(() => {});
+    }
     return {
       success: true,
       data: normalized,

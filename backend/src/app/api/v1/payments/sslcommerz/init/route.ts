@@ -11,6 +11,7 @@ import {
 } from '@/lib/sslcommerz';
 
 import { validateAndComputeCoupon } from '@/lib/tickets';
+import { checkMatchEligibility, getViewerEligibilityProfile } from '@/lib/eligibility';
 
 const initPaymentSchema = z.object({
   amount: z.number().positive('Amount must be greater than 0').max(500000).optional(),
@@ -94,6 +95,15 @@ export async function POST(request: NextRequest) {
       }
       if (match.status === 'CANCELLED' || match.status === 'COMPLETED') {
         return fail('BAD_REQUEST', 'Cannot pay for a cancelled or completed match', 400);
+      }
+      const viewer = await getViewerEligibilityProfile(session);
+      const eligibility = checkMatchEligibility(viewer, match);
+      if (!eligibility.eligible) {
+        return fail(
+          'ELIGIBILITY_RESTRICTED',
+          eligibility.reason || 'You do not meet this match’s age or gender requirements.',
+          403
+        );
       }
       if (match.participants.some((p) => p.userId === session.userId)) {
         return fail('CONFLICT', 'You have already joined this match', 409);

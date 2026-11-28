@@ -1,7 +1,10 @@
 import { NextRequest } from 'next/server';
+import { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { handleRouteError, ok } from '@/lib/http';
+import { verifySession } from '@/lib/auth';
 import { toMatchDto } from '@/lib/mappers';
+import { buildMatchEligibilityWhere, getViewerEligibilityProfile } from '@/lib/eligibility';
 
 function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
   const toRad = (deg: number) => (deg * Math.PI) / 180;
@@ -17,17 +20,23 @@ function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): nu
 
 export async function GET(request: NextRequest) {
   try {
+    const session = await verifySession(request);
+    const viewer = await getViewerEligibilityProfile(session);
+    const eligibilityWhere = buildMatchEligibilityWhere(viewer);
     const { searchParams } = new URL(request.url);
     const lat = parseFloat(searchParams.get('lat') || '23.8103');
     const lng = parseFloat(searchParams.get('lng') || '90.4125');
     const radiusKm = Math.max(1, Math.min(500, parseFloat(searchParams.get('radiusKm') || '25') || 25));
     const sportId = searchParams.get('sportId')?.trim();
 
+    const where: Prisma.MatchWhereInput = {
+      status: { in: ['OPEN', 'FULL', 'IN_PROGRESS'] },
+      ...(sportId ? { sportId } : {}),
+      ...(eligibilityWhere ? { AND: [eligibilityWhere] } : {}),
+    };
+
     const matches = await prisma.match.findMany({
-      where: {
-        status: { in: ['OPEN', 'FULL', 'IN_PROGRESS'] },
-        ...(sportId ? { sportId } : {}),
-      },
+      where,
       orderBy: { startTime: 'asc' },
       take: 100,
       include: {

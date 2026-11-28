@@ -3,19 +3,26 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faLocationCrosshairs, faShieldHalved } from '@fortawesome/free-solid-svg-icons';
 import { matchService } from '../../services/endpoints/matchService';
 import { useAppStore } from '../../store/useAppStore';
+import { useAuth } from '../../hooks/useAuth';
+import { isUserEligibleForMatch } from '../../utils/matchEligibility';
 import MapView from '../../components/common/MapView';
 import Button from '../../components/common/Button';
 import toast from 'react-hot-toast';
 
 export const PlayerMapView = () => {
-  const matches = useAppStore((s) => s.matches);
+  const { user } = useAuth();
+  const rawMatches = useAppStore((s) => s.matches);
   const fetchMatches = useAppStore((s) => s.fetchMatches);
   const detectUserLocation = useAppStore((s) => s.detectUserLocation);
+  const matches = React.useMemo(
+    () => (rawMatches || []).filter((m) => isUserEligibleForMatch(user, m).eligible),
+    [rawMatches, user]
+  );
 
   useEffect(() => {
-    fetchMatches();
+    fetchMatches({ force: Boolean(user?.gender || user?.age) });
     detectUserLocation();
-  }, [fetchMatches, detectUserLocation]);
+  }, [fetchMatches, detectUserLocation, user?.gender, user?.age]);
 
   const handleSearchThisArea = async () => {
     await fetchMatches({ force: true });

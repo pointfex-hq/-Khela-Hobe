@@ -106,9 +106,12 @@ export const matchService = {
     };
   },
 
-  getMyCreatedMatches: async (statusFilter = 'all') => {
+  getMyCreatedMatches: async (statusFilter = 'all', extraParams = {}) => {
     const response = await apiClient.get('/matches/mine', {
-      params: { status: statusFilter && statusFilter !== 'all' ? statusFilter.toUpperCase() : 'ALL' },
+      params: {
+        status: statusFilter && statusFilter !== 'all' ? statusFilter.toUpperCase() : 'ALL',
+        ...extraParams,
+      },
     });
     const payload = unwrapEnvelope(response);
     const allMatches = Array.isArray(payload?.content)
@@ -130,7 +133,9 @@ export const matchService = {
     return {
       success: true,
       data: allMatches,
-      total: allMatches.length,
+      total: payload?.totalElements ?? allMatches.length,
+      page: payload?.page ?? 0,
+      totalPages: payload?.totalPages ?? 1,
       counts,
     };
   },

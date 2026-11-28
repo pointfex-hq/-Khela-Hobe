@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import { z } from 'zod';
-import { JoinMode, MatchStatus, MatchType, PlayerSkillLevel, Prisma } from '@prisma/client';
+import { JoinMode, MatchGenderRestriction, MatchStatus, MatchType, PlayerSkillLevel, Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { fail, handleRouteError, ok, parsePagination, toPageResponse } from '@/lib/http';
 import { verifySession, isQuickMatchHostAllowed } from '@/lib/auth';
@@ -8,6 +8,7 @@ import { toMatchDto } from '@/lib/mappers';
 import { CACHE_KEYS, cacheGet, cacheSet, invalidateMatchesCache } from '@/lib/cache';
 import { broadcastAreaMatchAlert } from '@/lib/areaNotifications';
 import { recordAuditLog } from '@/lib/audit';
+import { buildMatchEligibilityWhere, getViewerEligibilityProfile } from '@/lib/eligibility';
 
 const matchLocationSchema = z.object({
   name: z.string().trim().max(150).optional().nullable(),
@@ -43,6 +44,9 @@ const createMatchSchema = z.object({
   coverImageUrl: z.string().trim().url().max(1000).optional().nullable(),
   rules: z.string().trim().max(2000).optional().nullable(),
   guardianRequired: z.boolean().optional(),
+  genderRestriction: z.enum(['ALL', 'BOYS_ONLY', 'GIRLS_ONLY']).optional(),
+  minAge: z.number().int().min(0).max(99).optional(),
+  maxAge: z.number().int().min(5).max(99).optional(),
   matchType: z.enum(['QUICK_MATCH', 'ORGANIZED_MATCH']).optional(),
   equipment: z
     .array(
@@ -56,29 +60,69 @@ const createMatchSchema = z.object({
 
 export async function GET(request: NextRequest) {
   try {
+    const session = await verifySession(request);
+    const viewer = await getViewerEligibilityProfile(session);
     const { page, size, skip, searchParams } = parsePagination(request.url, 20);
     const sportId = searchParams.get('sportId')?.trim();
     const city = searchParams.get('city')?.trim();
+    const area = searchParams.get('area')?.trim();
     const status = searchParams.get('status')?.trim()?.toUpperCase();
     const skillLevel = searchParams.get('skillLevel')?.trim()?.toUpperCase();
+    const genderRestriction = searchParams.get('genderRestriction')?.trim()?.toUpperCase();
     const from = searchParams.get('from')?.trim();
     const to = searchParams.get('to')?.trim();
     const q = searchParams.get('q')?.trim();
 
-    const cacheKey = `${CACHE_KEYS.MATCHES_PREFIX}${page}:${size}:${sportId || ''}:${city || ''}:${status || ''}:${skillLevel || ''}:${from || ''}:${to || ''}:${q || ''}`;
+    const viewerKey = viewer
+      ? viewer.roles.includes('ADMIN')
+        ? 'ADMIN'
+        : `${viewer.gender || 'NONE'}:${viewer.age ?? 'NONE'}:${viewer.userId}`
+      : 'anon';
+
+    const cacheKey = `${CACHE_KEYS.MATCHES_PREFIX}${viewerKey}:${page}:${size}:${sportId || ''}:${city || ''}:${area || ''}:${status || ''}:${skillLevel || ''}:${genderRestriction || ''}:${from || ''}:${to || ''}:${q || ''}`;
     const cached = await cacheGet<ReturnType<typeof toPageResponse>>(cacheKey);
     if (cached) {
       return ok(cached);
     }
 
+    const andClauses: Prisma.MatchWhereInput[] = [];
+    const eligibilityWhere = buildMatchEligibilityWhere(viewer);
+    if (eligibilityWhere) {
+      andClauses.push(eligibilityWhere);
+    }
+
     const where: Prisma.MatchWhereInput = {};
     if (sportId) where.sportId = sportId;
-    if (city) where.city = { contains: city, mode: 'insensitive' };
+    if (city) {
+      andClauses.push({
+        OR: [
+          { city: { contains: city, mode: 'insensitive' } },
+          { area: { contains: city, mode: 'insensitive' } },
+        ],
+      });
+    }
+    if (area) {
+      andClauses.push({
+        OR: [
+          { area: { contains: area, mode: 'insensitive' } },
+          { city: { contains: area, mode: 'insensitive' } },
+          { locationName: { contains: area, mode: 'insensitive' } },
+        ],
+      });
+    }
     if (status && Object.values(MatchStatus).includes(status as MatchStatus)) {
       where.status = status as MatchStatus;
+    } else if (status === 'ACTIVE') {
+      where.status = { not: MatchStatus.CANCELLED };
     }
     if (skillLevel && Object.values(PlayerSkillLevel).includes(skillLevel as PlayerSkillLevel)) {
       where.skillLevel = skillLevel as PlayerSkillLevel;
+    }
+    if (
+      genderRestriction &&
+      Object.values(MatchGenderRestriction).includes(genderRestriction as MatchGenderRestriction)
+    ) {
+      where.genderRestriction = genderRestriction as MatchGenderRestriction;
     }
     if (from || to) {
       where.startTime = {
@@ -87,12 +131,18 @@ export async function GET(request: NextRequest) {
       };
     }
     if (q) {
-      where.OR = [
-        { title: { contains: q, mode: 'insensitive' } },
-        { locationName: { contains: q, mode: 'insensitive' } },
-        { area: { contains: q, mode: 'insensitive' } },
-        { city: { contains: q, mode: 'insensitive' } },
-      ];
+      andClauses.push({
+        OR: [
+          { title: { contains: q, mode: 'insensitive' } },
+          { locationName: { contains: q, mode: 'insensitive' } },
+          { area: { contains: q, mode: 'insensitive' } },
+          { city: { contains: q, mode: 'insensitive' } },
+          { sport: { name: { contains: q, mode: 'insensitive' } } },
+        ],
+      });
+    }
+    if (andClauses.length > 0) {
+      where.AND = andClauses;
     }
 
     const [matches, total] = await Promise.all([
@@ -194,6 +244,15 @@ export async function POST(request: NextRequest) {
     const locationName = parsed.location?.name ?? venue?.name ?? area ?? city;
     const locationAddress = parsed.location?.address ?? venue?.address ?? null;
 
+    const minAge = parsed.minAge ?? 0;
+    const maxAge = parsed.maxAge ?? 99;
+    if (minAge > maxAge) {
+      return fail('BAD_REQUEST', 'Minimum age cannot exceed maximum age', 400, [
+        { field: 'minAge', message: 'Minimum age must be <= maximum age' },
+      ]);
+    }
+    const genderRestriction = (parsed.genderRestriction as MatchGenderRestriction | undefined) ?? MatchGenderRestriction.ALL;
+
     const match = await prisma.match.create({
       data: {
         title: parsed.title,
@@ -221,6 +280,9 @@ export async function POST(request: NextRequest) {
         coverImageUrl: parsed.coverImageUrl ?? null,
         rules: parsed.rules ?? null,
         guardianRequired: parsed.guardianRequired ?? false,
+        genderRestriction,
+        minAge,
+        maxAge,
         ...(parsed.equipment && parsed.equipment.length > 0
           ? {
               equipmentRequirements: {

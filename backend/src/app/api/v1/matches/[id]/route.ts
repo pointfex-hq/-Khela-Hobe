@@ -1,11 +1,12 @@
 import { NextRequest } from 'next/server';
 import { z } from 'zod';
-import { JoinMode, MatchStatus, PlayerSkillLevel } from '@prisma/client';
+import { JoinMode, MatchGenderRestriction, MatchStatus, PlayerSkillLevel } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { fail, handleRouteError, ok } from '@/lib/http';
 import { verifySession, isQuickMatchHostAllowed } from '@/lib/auth';
 import { toMatchDto } from '@/lib/mappers';
 import { CACHE_KEYS, cacheGet, cacheSet, invalidateMatchesCache } from '@/lib/cache';
+import { checkMatchEligibility, getViewerEligibilityProfile } from '@/lib/eligibility';
 
 const updateMatchSchema = z.object({
   title: z.string().trim().min(3).max(150).optional(),
@@ -34,6 +35,9 @@ const updateMatchSchema = z.object({
   coverImageUrl: z.string().trim().url().max(1000).optional().nullable(),
   rules: z.string().trim().max(2000).optional().nullable(),
   guardianRequired: z.boolean().optional(),
+  genderRestriction: z.enum(['ALL', 'BOYS_ONLY', 'GIRLS_ONLY']).optional(),
+  minAge: z.number().int().min(0).max(99).optional(),
+  maxAge: z.number().int().min(5).max(99).optional(),
   status: z.enum(['OPEN', 'FULL', 'CLOSED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED']).optional(),
   equipment: z
     .array(
@@ -70,11 +74,21 @@ export async function GET(
 ) {
   try {
     const session = await verifySession(request);
+    const viewer = await getViewerEligibilityProfile(session);
     const { id } = await context.params;
     const cacheKey = CACHE_KEYS.MATCH_BY_ID(id);
     const cached = await cacheGet<ReturnType<typeof toMatchDto>>(cacheKey);
     if (cached) {
-      return ok(withViewerEquipmentFlags(cached, session?.userId));
+      const withEquip = withViewerEquipmentFlags(cached, session?.userId);
+      return ok({
+        ...withEquip,
+        viewerEligibility: checkMatchEligibility(viewer, {
+          organizerId: cached.organizer.id,
+          genderRestriction: cached.genderRestriction,
+          minAge: cached.minAge,
+          maxAge: cached.maxAge,
+        }),
+      });
     }
 
     const match = await prisma.match.findUnique({
@@ -123,7 +137,16 @@ export async function GET(
       },
     };
     await cacheSet(cacheKey, enrichedDto, 120);
-    return ok(withViewerEquipmentFlags(enrichedDto, session?.userId));
+    const withEquip = withViewerEquipmentFlags(enrichedDto, session?.userId);
+    return ok({
+      ...withEquip,
+      viewerEligibility: checkMatchEligibility(viewer, {
+        organizerId: match.organizerId,
+        genderRestriction: match.genderRestriction,
+        minAge: match.minAge,
+        maxAge: match.maxAge,
+      }),
+    });
   } catch (error) {
     return handleRouteError(error);
   }
@@ -211,6 +234,12 @@ export async function PATCH(
       }
     }
 
+    const nextMinAge = parsed.minAge ?? existing.minAge;
+    const nextMaxAge = parsed.maxAge ?? existing.maxAge;
+    if (nextMinAge > nextMaxAge) {
+      return fail('BAD_REQUEST', 'Minimum age cannot exceed maximum age', 400);
+    }
+
     const updated = await prisma.match.update({
       where: { id },
       data: {
@@ -244,6 +273,11 @@ export async function PATCH(
         ...(parsed.guardianRequired !== undefined
           ? { guardianRequired: parsed.guardianRequired }
           : {}),
+        ...(parsed.genderRestriction !== undefined
+          ? { genderRestriction: parsed.genderRestriction as MatchGenderRestriction }
+          : {}),
+        ...(parsed.minAge !== undefined ? { minAge: parsed.minAge } : {}),
+        ...(parsed.maxAge !== undefined ? { maxAge: parsed.maxAge } : {}),
         ...(parsed.status !== undefined ? { status: parsed.status as MatchStatus } : {}),
       },
       include: {

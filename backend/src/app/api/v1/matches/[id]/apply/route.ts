@@ -5,6 +5,7 @@ import prisma from '@/lib/prisma';
 import { fail, handleRouteError, ok } from '@/lib/http';
 import { verifySession } from '@/lib/auth';
 import { toApplicationDto } from '@/lib/mappers';
+import { checkMatchEligibility, getViewerEligibilityProfile } from '@/lib/eligibility';
 
 const applySchema = z.object({
   message: z.string().trim().max(1000).optional(),
@@ -30,6 +31,16 @@ export async function POST(
     }
     if (match.status === MatchStatus.CANCELLED || match.status === MatchStatus.COMPLETED) {
       return fail('BAD_REQUEST', 'Cannot apply to a cancelled or completed match', 400);
+    }
+
+    const viewer = await getViewerEligibilityProfile(session);
+    const eligibility = checkMatchEligibility(viewer, match);
+    if (!eligibility.eligible) {
+      return fail(
+        'ELIGIBILITY_RESTRICTED',
+        eligibility.reason || 'You do not meet this match’s age or gender requirements.',
+        403
+      );
     }
 
     const alreadyJoined = await prisma.matchParticipant.findFirst({
