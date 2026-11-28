@@ -6,7 +6,6 @@ import {
   faBars,
   faXmark,
   faRightFromBracket,
-  faMagnifyingGlass,
   faBell,
   faArrowRightFromBracket,
   faRepeat,
@@ -36,8 +35,6 @@ import { toastService } from '../components/feedback/toastService';
 
 export const DashboardLayout = () => {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
-  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
   const [otpInput, setOtpInput] = useState('');
   const [verifyingOtp, setVerifyingOtp] = useState(false);
   const [resendingOtp, setResendingOtp] = useState(false);
@@ -57,7 +54,6 @@ export const DashboardLayout = () => {
   // Auto-close mobile overlays on route navigation
   useEffect(() => {
     setMobileSidebarOpen(false);
-    setMobileSearchOpen(false);
   }, [location.pathname, location.search]);
 
   const getBottomNavItems = () => {
@@ -101,16 +97,6 @@ export const DashboardLayout = () => {
   };
 
   const bottomNavItems = getBottomNavItems();
-
-  const handleSearchSubmit = (e) => {
-    e.preventDefault();
-    const targetPath = role === ROLES.PLAYER || role === ROLES.ADMIN ? ROUTES.PLAYER_EXPLORE : ROUTES.EXPLORE_MATCHES;
-    if (searchQuery.trim()) {
-      navigate(`${targetPath}?search=${encodeURIComponent(searchQuery.trim())}`);
-    } else {
-      navigate(targetPath);
-    }
-  };
 
   return (
     <div className="min-h-screen flex overflow-x-clip bg-light-background dark:bg-dark-background text-light-on-background dark:text-dark-on-background transition-colors duration-200">
@@ -167,37 +153,8 @@ export const DashboardLayout = () => {
               </Link>
             </div>
 
-            {/* Desktop Search Bar */}
-            <form onSubmit={handleSearchSubmit} className="relative flex-1 max-w-md hidden sm:flex items-center">
-              <FontAwesomeIcon
-                icon={faMagnifyingGlass}
-                className="absolute left-3.5 text-light-muted dark:text-dark-muted text-xs pointer-events-none"
-              />
-              <input
-                type="search"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search matches, venues, or players..."
-                className="w-full pl-9 pr-4 py-2 rounded-md bg-light-background dark:bg-dark-background border border-light-border dark:border-dark-border text-light-on-surface dark:text-dark-on-surface placeholder:text-light-muted dark:placeholder:text-dark-muted font-body text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus:border-primary transition-colors"
-              />
-            </form>
-
             {/* Right Header Controls */}
             <div className="flex items-center gap-1.5 sm:gap-3 ml-auto shrink-0">
-              {/* Mobile Search Trigger */}
-              <button
-                type="button"
-                onClick={() => setMobileSearchOpen((prev) => !prev)}
-                aria-label="Search matches"
-                className={`sm:hidden inline-flex items-center justify-center w-9 h-9 rounded-md border transition-colors ${
-                  mobileSearchOpen
-                    ? 'bg-primary text-on-primary border-primary'
-                    : 'bg-light-surface dark:bg-dark-surface border-light-border dark:border-dark-border text-light-muted dark:text-dark-muted'
-                }`}
-              >
-                <FontAwesomeIcon icon={mobileSearchOpen ? faXmark : faMagnifyingGlass} className="text-sm" />
-              </button>
-
               {/* Dark/Light Theme Toggle */}
               <ThemeToggle />
 
@@ -252,35 +209,6 @@ export const DashboardLayout = () => {
             </div>
           </div>
           </div>
-
-          {/* Expandable Mobile Search Bar */}
-          {mobileSearchOpen && (
-            <form
-              onSubmit={handleSearchSubmit}
-              className="sm:hidden px-3 pb-3 pt-1 flex items-center gap-2 border-t border-light-border/60 dark:border-dark-border/60"
-            >
-              <div className="relative flex-1 flex items-center">
-                <FontAwesomeIcon
-                  icon={faMagnifyingGlass}
-                  className="absolute left-3 text-light-muted dark:text-dark-muted text-xs pointer-events-none"
-                />
-                <input
-                  type="search"
-                  autoFocus
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search matches, venues, or players..."
-                  className="w-full pl-8 pr-3 py-2 rounded-md bg-light-background dark:bg-dark-background border border-light-border dark:border-dark-border text-light-on-surface dark:text-dark-on-surface text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-                />
-              </div>
-              <button
-                type="submit"
-                className="px-3.5 py-2 rounded-md bg-primary text-on-primary font-label text-xs font-semibold shrink-0"
-              >
-                Go
-              </button>
-            </form>
-          )}
         </header>
 
         {/* Content Viewport with mobile bottom navigation spacing */}
