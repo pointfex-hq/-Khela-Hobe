@@ -16,6 +16,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { useAppStore } from '../../store/useAppStore';
 import LoadingSpinner from '../../components/feedback/LoadingSpinner';
 import EmptyState from '../../components/common/EmptyState';
+import Pagination from '../../components/common/Pagination';
 import { toastService } from '../../components/feedback/toastService';
 import { ROUTES } from '../../constants/routes';
 
@@ -29,17 +30,26 @@ export const TournamentsPage = () => {
   const [selectedSport, setSelectedSport] = useState('All Sports');
   const [selectedCity, setSelectedCity] = useState('All Bangladesh');
   const [interestLoadingId, setInterestLoadingId] = useState(null);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
 
   const sportsCatalog = useAppStore((s) => s.sports);
   const fetchSports = useAppStore((s) => s.fetchSports);
   const zonesCatalog = useAppStore((s) => s.zones);
   const fetchLocations = useAppStore((s) => s.fetchLocations);
 
-  const loadTournaments = async () => {
+  const loadTournaments = async (targetPage = page) => {
     setLoading(true);
     try {
-      const res = await eventService.getPublicEvents();
+      const res = await eventService.getPublicEvents({
+        page: targetPage - 1,
+        size: 9,
+        ...(selectedSport !== 'All Sports' ? { sport: selectedSport } : {}),
+        ...(selectedCity !== 'All Bangladesh' ? { city: selectedCity } : {}),
+        ...(searchQuery.trim() ? { q: searchQuery.trim() } : {}),
+      });
       setTournaments(res.data || []);
+      setTotalPages(res.totalPages || 1);
     } catch {
       toastService.error('Failed to load tournaments.');
     } finally {
@@ -48,7 +58,14 @@ export const TournamentsPage = () => {
   };
 
   useEffect(() => {
-    loadTournaments();
+    setPage(1);
+  }, [selectedSport, selectedCity, searchQuery]);
+
+  useEffect(() => {
+    loadTournaments(page);
+  }, [page, selectedSport, selectedCity, searchQuery]);
+
+  useEffect(() => {
     fetchSports();
     fetchLocations();
   }, [fetchSports, fetchLocations]);
@@ -274,6 +291,15 @@ export const TournamentsPage = () => {
             );
           })}
         </div>
+      )}
+
+      {!loading && totalPages > 1 && (
+        <Pagination
+          currentPage={page}
+          totalPages={totalPages}
+          onPageChange={setPage}
+          className="pt-2"
+        />
       )}
     </div>
   );

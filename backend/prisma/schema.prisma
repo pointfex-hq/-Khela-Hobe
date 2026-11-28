@@ -184,6 +184,7 @@ model PlayerProfile {
   displayName String
   bio         String?
   dateOfBirth DateTime?
+  age         Int?
   gender      String?
   city        String
   area        String?
@@ -501,6 +502,7 @@ model Match {
   coverImageUrl   String?
   rules           String?
   guardianRequired Boolean                                          @default(false)
+  genderRestriction MatchGenderRestriction                          @default(ALL)
   minAge          Int                                               @default(0)
   maxAge          Int                                               @default(99)
 
@@ -521,6 +523,13 @@ model Match {
   @@index([sportId, city])
   @@index([startTime])
   @@index([latitude, longitude])
+  @@index([genderRestriction, minAge, maxAge])
+}
+
+enum MatchGenderRestriction {
+  ALL
+  BOYS_ONLY
+  GIRLS_ONLY
 }
 
 model MatchImage {

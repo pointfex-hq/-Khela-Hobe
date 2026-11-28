@@ -27,6 +27,7 @@ import EmptyState from '../../components/common/EmptyState';
 import LoadingSpinner from '../../components/feedback/LoadingSpinner';
 import Modal from '../../components/modals/Modal';
 import ConfirmationDialog from '../../components/feedback/ConfirmationDialog';
+import Pagination from '../../components/common/Pagination';
 
 export const MatchModerationPage = () => {
   const navigate = useNavigate();
@@ -38,6 +39,8 @@ export const MatchModerationPage = () => {
   const [search, setSearch] = useState('');
   const [sportFilter, setSportFilter] = useState('All Sports');
   const [statusFilter, setStatusFilter] = useState('Flagged Only');
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
 
   // Inspection Modal
   const [inspectedMatch, setInspectedMatch] = useState(null);
@@ -53,7 +56,7 @@ export const MatchModerationPage = () => {
   const [tournamentNoteById, setTournamentNoteById] = useState({});
   const [moderatingTournamentId, setModeratingTournamentId] = useState(null);
 
-  const fetchMatches = async () => {
+  const fetchMatches = async (targetPage = page) => {
     try {
       setLoading(true);
       const [res, tourRes] = await Promise.all([
@@ -61,11 +64,14 @@ export const MatchModerationPage = () => {
           search,
           sport: sportFilter,
           status: statusFilter,
+          page: targetPage - 1,
+          size: 12,
         }),
-        eventService.getAdminTournaments('ALL').catch(() => ({ data: [] })),
+        eventService.getAdminTournaments('ALL', { page: 0, size: 12 }).catch(() => ({ data: [] })),
       ]);
       if (res.success) {
         setMatches(res.data || []);
+        setTotalPages(res.totalPages || 1);
       }
       setTournaments(tourRes.data || []);
     } catch (err) {
@@ -81,7 +87,7 @@ export const MatchModerationPage = () => {
       const note = tournamentNoteById[tournament.id] || '';
       const res = await eventService.moderateTournament(tournament.id, action, note);
       toastService.success(res.message);
-      await fetchMatches();
+      await fetchMatches(page);
     } catch (err) {
       toastService.error(err?.message || 'Failed to moderate tournament.');
     } finally {
@@ -90,8 +96,12 @@ export const MatchModerationPage = () => {
   };
 
   useEffect(() => {
-    fetchMatches();
+    setPage(1);
   }, [sportFilter, statusFilter]);
+
+  useEffect(() => {
+    fetchMatches(page);
+  }, [sportFilter, statusFilter, page]);
 
   const handleSearchSubmit = (e) => {
     e.preventDefault();
@@ -425,6 +435,15 @@ export const MatchModerationPage = () => {
             setSportFilter('All Sports');
             setStatusFilter('All Matches');
           }}
+        />
+      )}
+
+      {!loading && moderationTab === 'matches' && totalPages > 1 && (
+        <Pagination
+          currentPage={page}
+          totalPages={totalPages}
+          onPageChange={setPage}
+          className="pt-2"
         />
       )}
 

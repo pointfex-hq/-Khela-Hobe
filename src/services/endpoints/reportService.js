@@ -54,6 +54,8 @@ export const reportService = {
       success: true,
       data: results,
       total: pageData?.totalElements ?? results.length,
+      page: pageData?.page ?? 0,
+      totalPages: pageData?.totalPages ?? 1,
       pendingCount: results.filter((r) => r.status === 'Pending').length,
     };
   },

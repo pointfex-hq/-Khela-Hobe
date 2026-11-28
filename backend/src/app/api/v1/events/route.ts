@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server';
 import { z } from 'zod';
 import { NotificationType, TournamentStatus } from '@prisma/client';
 import prisma from '@/lib/prisma';
-import { fail, handleRouteError, ok } from '@/lib/http';
+import { fail, handleRouteError, ok, parsePagination, toPageResponse } from '@/lib/http';
 import { verifySession, isOrganizerVerifiedForCreation } from '@/lib/auth';
 import { toTournamentDto } from '@/lib/mappers';
 import { CACHE_KEYS, cacheGet, cacheSet, invalidateTournamentsCache } from '@/lib/cache';
@@ -48,15 +48,17 @@ const createTournamentSchema = z.object({
 export async function GET(request: NextRequest) {
   try {
     const session = await verifySession(request);
-    const { searchParams } = new URL(request.url);
+    const { page, size, skip, searchParams } = parsePagination(request.url, 9);
+    const paginate = searchParams.has('page') || searchParams.has('size');
     const city = searchParams.get('city')?.trim();
     const sport = searchParams.get('sport')?.trim();
     const q = searchParams.get('q')?.trim();
 
     if (!city && !sport && !q && !session) {
-      const cached = await cacheGet<ReturnType<typeof toTournamentDto>[]>(
-        CACHE_KEYS.TOURNAMENTS_PUBLIC
-      );
+      const cacheKey = paginate
+        ? `${CACHE_KEYS.TOURNAMENTS_PUBLIC}:p:${page}:${size}`
+        : CACHE_KEYS.TOURNAMENTS_PUBLIC;
+      const cached = await cacheGet<unknown>(cacheKey);
       if (cached) {
         return ok(cached);
       }
@@ -66,39 +68,57 @@ export async function GET(request: NextRequest) {
       status: { in: [TournamentStatus.APPROVED, TournamentStatus.COMPLETED] },
     };
 
-    if (city) {
-      where.city = { equals: city, mode: 'insensitive' };
+    if (city && city !== 'All Bangladesh') {
+      where.OR = [
+        { city: { contains: city, mode: 'insensitive' } },
+        { area: { contains: city, mode: 'insensitive' } },
+      ];
     }
-    if (sport) {
+    if (sport && sport !== 'All Sports') {
       where.sport = { contains: sport, mode: 'insensitive' };
     }
     if (q) {
-      where.OR = [
+      const qOr = [
         { title: { contains: q, mode: 'insensitive' } },
         { venueName: { contains: q, mode: 'insensitive' } },
         { area: { contains: q, mode: 'insensitive' } },
         { city: { contains: q, mode: 'insensitive' } },
         { sport: { contains: q, mode: 'insensitive' } },
       ];
+      if (where.OR) {
+        where.AND = [{ OR: where.OR }, { OR: qOr }];
+        delete where.OR;
+      } else {
+        where.OR = qOr;
+      }
     }
 
-    const tournaments = await prisma.tournament.findMany({
-      where,
-      orderBy: { createdAt: 'desc' },
-      include: {
-        organizer: { select: { id: true, fullName: true, profileImageUrl: true } },
-        registrations: { select: { id: true, status: true } },
-        interests: { select: { userId: true } },
-        tickets: { where: { status: { not: 'CANCELLED' } }, select: { id: true, status: true } },
-      },
-    });
+    const [tournaments, total] = await Promise.all([
+      prisma.tournament.findMany({
+        where,
+        ...(paginate ? { skip, take: size } : {}),
+        orderBy: { createdAt: 'desc' },
+        include: {
+          organizer: { select: { id: true, fullName: true, profileImageUrl: true } },
+          registrations: { select: { id: true, status: true } },
+          interests: { select: { userId: true } },
+          tickets: { where: { status: { not: 'CANCELLED' } }, select: { id: true, status: true } },
+        },
+      }),
+      paginate ? prisma.tournament.count({ where }) : Promise.resolve(0),
+    ]);
 
     const dtos = tournaments.map((t) => toTournamentDto(t, session?.userId));
+    const resultPayload = paginate ? toPageResponse(dtos, page, size, total) : dtos;
+
     if (!city && !sport && !q && !session) {
-      await cacheSet(CACHE_KEYS.TOURNAMENTS_PUBLIC, dtos, 120);
+      const cacheKey = paginate
+        ? `${CACHE_KEYS.TOURNAMENTS_PUBLIC}:p:${page}:${size}`
+        : CACHE_KEYS.TOURNAMENTS_PUBLIC;
+      await cacheSet(cacheKey, resultPayload, 120);
     }
 
-    return ok(dtos);
+    return ok(resultPayload);
   } catch (error) {
     return handleRouteError(error);
   }

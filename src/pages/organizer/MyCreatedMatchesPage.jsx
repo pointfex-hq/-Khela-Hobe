@@ -19,6 +19,7 @@ import { matchService } from '../../services/endpoints/matchService';
 import ConfirmationDialog from '../../components/feedback/ConfirmationDialog';
 import LoadingSpinner from '../../components/feedback/LoadingSpinner';
 import EmptyState from '../../components/common/EmptyState';
+import Pagination from '../../components/common/Pagination';
 import { toastService } from '../../components/feedback/toastService';
 import { ROUTES } from '../../constants/routes';
 
@@ -27,6 +28,8 @@ export const MyCreatedMatchesPage = () => {
   const [activeTab, setActiveTab] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [matches, setMatches] = useState([]);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
   const [counts, setCounts] = useState({
     all: 0,
     open: 0,
@@ -42,12 +45,17 @@ export const MyCreatedMatchesPage = () => {
   const [isCancelling, setIsCancelling] = useState(false);
 
   // Fetch matches
-  const loadMatches = async () => {
+  const loadMatches = async (targetPage = page) => {
     setLoading(true);
     try {
-      const res = await matchService.getMyCreatedMatches(activeTab);
+      const res = await matchService.getMyCreatedMatches(activeTab, {
+        page: targetPage - 1,
+        size: 10,
+        ...(searchQuery.trim() ? { q: searchQuery.trim() } : {}),
+      });
       if (res?.data) {
         setMatches(res.data);
+        setTotalPages(res.totalPages || 1);
       }
       if (res?.counts) {
         setCounts(res.counts);
@@ -60,8 +68,12 @@ export const MyCreatedMatchesPage = () => {
   };
 
   useEffect(() => {
-    loadMatches();
-  }, [activeTab]);
+    setPage(1);
+  }, [activeTab, searchQuery]);
+
+  useEffect(() => {
+    loadMatches(page);
+  }, [activeTab, searchQuery, page]);
 
   // Filter by search query
   const filteredMatches = useMemo(() => {
@@ -346,6 +358,15 @@ export const MyCreatedMatchesPage = () => {
             );
           })}
         </div>
+      )}
+
+      {!loading && totalPages > 1 && (
+        <Pagination
+          currentPage={page}
+          totalPages={totalPages}
+          onPageChange={setPage}
+          className="pt-2"
+        />
       )}
 
       {/* Confirmation Dialog for Destructive Cancel Action */}

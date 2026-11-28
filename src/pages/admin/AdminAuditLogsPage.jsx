@@ -9,6 +9,7 @@ import {
 import { adminService } from '../../services/endpoints/adminService';
 import LoadingSpinner from '../../components/feedback/LoadingSpinner';
 import EmptyState from '../../components/common/EmptyState';
+import Pagination from '../../components/common/Pagination';
 import { formatDateTimeDhaka } from '../../utils/formatters';
 
 export const AdminAuditLogsPage = () => {
@@ -18,17 +19,21 @@ export const AdminAuditLogsPage = () => {
   const [search, setSearch] = useState('');
   const [actionFilter, setActionFilter] = useState('ALL');
   const [entityFilter, setEntityFilter] = useState('ALL');
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
 
-  const fetchLogs = async () => {
+  const fetchLogs = async (targetPage = page) => {
     setLoading(true);
     try {
       const res = await adminService.getAuditLogs({
         action: actionFilter,
         entityType: entityFilter,
         q: search.trim() || undefined,
-        size: 50,
+        page: targetPage - 1,
+        size: 25,
       });
       setLogs(res.data || []);
+      setTotalPages(res.totalPages || 1);
       if (Array.isArray(res.availableActions)) {
         setActions(res.availableActions);
       }
@@ -40,8 +45,12 @@ export const AdminAuditLogsPage = () => {
   };
 
   useEffect(() => {
-    fetchLogs();
+    setPage(1);
   }, [actionFilter, entityFilter]);
+
+  useEffect(() => {
+    fetchLogs(page);
+  }, [actionFilter, entityFilter, page]);
 
   return (
     <div className="flex flex-col gap-6 max-w-6xl w-full mx-auto pb-12">
@@ -201,6 +210,15 @@ export const AdminAuditLogsPage = () => {
             </table>
           </div>
         </div>
+      )}
+
+      {!loading && totalPages > 1 && (
+        <Pagination
+          currentPage={page}
+          totalPages={totalPages}
+          onPageChange={setPage}
+          className="pt-2"
+        />
       )}
     </div>
   );

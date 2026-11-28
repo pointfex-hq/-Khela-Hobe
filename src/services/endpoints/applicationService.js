@@ -2,11 +2,23 @@ import apiClient from '../api/apiClient';
 import { unwrapEnvelope, normalizeApplication } from '../../utils/dtoMappers';
 
 export const applicationService = {
-  getMyApplications: async () => {
-    const response = await apiClient.get('/applications/my');
-    const list = unwrapEnvelope(response);
-    const normalized = Array.isArray(list) ? list.map(normalizeApplication) : [];
-    return { success: true, data: normalized, total: normalized.length };
+  getMyApplications: async (status = 'all', params = {}) => {
+    const response = await apiClient.get('/applications/my', {
+      params: {
+        ...(status && status !== 'all' ? { status: status.toUpperCase() } : {}),
+        ...params,
+      },
+    });
+    const raw = unwrapEnvelope(response);
+    const list = Array.isArray(raw?.content) ? raw.content : Array.isArray(raw) ? raw : [];
+    const normalized = list.map(normalizeApplication);
+    return {
+      success: true,
+      data: normalized,
+      total: raw?.totalElements ?? normalized.length,
+      page: raw?.page ?? 0,
+      totalPages: raw?.totalPages ?? 1,
+    };
   },
 
   submitApplication: async (matchId, payload = {}) => {
@@ -25,15 +37,18 @@ export const applicationService = {
     return { success: true, message: 'Application withdrawn successfully.' };
   },
 
-  getOrganizerApplications: async (matchId) => {
+  getOrganizerApplications: async (matchId, params = {}) => {
     const endpoint = matchId ? `/matches/${matchId}/applications` : '/applications/organizer';
-    const response = await apiClient.get(endpoint);
-    const list = unwrapEnvelope(response);
-    const normalized = Array.isArray(list) ? list.map(normalizeApplication) : [];
+    const response = await apiClient.get(endpoint, { params });
+    const raw = unwrapEnvelope(response);
+    const list = Array.isArray(raw?.content) ? raw.content : Array.isArray(raw) ? raw : [];
+    const normalized = list.map(normalizeApplication);
     return {
       success: true,
       data: normalized,
-      total: normalized.length,
+      total: raw?.totalElements ?? normalized.length,
+      page: raw?.page ?? 0,
+      totalPages: raw?.totalPages ?? 1,
       pendingCount: normalized.filter((a) => a.status === 'pending').length,
     };
   },

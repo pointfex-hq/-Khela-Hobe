@@ -85,6 +85,7 @@ export const AuthProvider = ({ children }) => {
         const normalized = normalizeUser(result.user);
         setUser(normalized);
         useAppStore.getState().setCachedUser(normalized);
+        useAppStore.getState().invalidateMatches({ refetch: false });
         setToken(result.accessToken);
         toast.success(`Welcome back, ${normalized.name || normalized.fullName}`);
         return { success: true, user: normalized };
@@ -110,6 +111,7 @@ export const AuthProvider = ({ children }) => {
         const normalized = normalizeUser(result.user);
         setUser(normalized);
         useAppStore.getState().setCachedUser(normalized);
+        useAppStore.getState().invalidateMatches({ refetch: false });
         setToken(result.accessToken);
         toast.success(`Welcome to Khela Hobe, ${normalized.name || normalized.fullName}!`);
         return { success: true, user: normalized };
@@ -137,6 +139,7 @@ export const AuthProvider = ({ children }) => {
     } finally {
       tokenService.clearTokens();
       useAppStore.getState().clearCachedUser();
+      useAppStore.getState().invalidateMatches({ refetch: false });
       setUser(null);
       setToken(null);
       toast.success('Signed out successfully');
@@ -240,6 +243,7 @@ export const AuthProvider = ({ children }) => {
         const normalized = normalizeUser(result.user);
         setUser(normalized);
         useAppStore.getState().setCachedUser(normalized);
+        useAppStore.getState().invalidateMatches({ refetch: false });
         setToken(result.accessToken);
         toast.success(`Signed in as ${normalized.name || normalized.fullName}`);
         return { success: true, user: normalized };

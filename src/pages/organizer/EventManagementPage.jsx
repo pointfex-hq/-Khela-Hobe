@@ -16,6 +16,7 @@ import {
 import { eventService } from '../../services/endpoints/eventService';
 import LoadingSpinner from '../../components/feedback/LoadingSpinner';
 import EmptyState from '../../components/common/EmptyState';
+import Pagination from '../../components/common/Pagination';
 import { ROUTES } from '../../constants/routes';
 
 export const EventManagementPage = () => {
@@ -23,14 +24,24 @@ export const EventManagementPage = () => {
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all');
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+
+  useEffect(() => {
+    setPage(1);
+  }, [filter]);
 
   useEffect(() => {
     const fetchEvents = async () => {
       setLoading(true);
       try {
-        const res = await eventService.getOrganizerEvents(filter);
+        const res = await eventService.getOrganizerEvents(filter, {
+          page: page - 1,
+          size: 8,
+        });
         if (res?.data) {
           setEvents(res.data);
+          setTotalPages(res.totalPages || 1);
         }
       } catch (err) {
         console.error('Failed to load events', err);
@@ -40,7 +51,7 @@ export const EventManagementPage = () => {
     };
 
     fetchEvents();
-  }, [filter]);
+  }, [filter, page]);
 
   return (
     <div className="max-w-6xl w-full mx-auto flex flex-col gap-6">
@@ -201,6 +212,15 @@ export const EventManagementPage = () => {
             );
           })}
         </div>
+      )}
+
+      {!loading && totalPages > 1 && (
+        <Pagination
+          currentPage={page}
+          totalPages={totalPages}
+          onPageChange={setPage}
+          className="pt-2"
+        />
       )}
     </div>
   );

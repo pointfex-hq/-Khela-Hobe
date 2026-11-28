@@ -23,6 +23,7 @@ import Badge from '../../components/common/Badge';
 import EmptyState from '../../components/common/EmptyState';
 import LoadingSpinner from '../../components/feedback/LoadingSpinner';
 import Modal from '../../components/modals/Modal';
+import Pagination from '../../components/common/Pagination';
 
 export const ReportManagementPage = () => {
   const [reports, setReports] = useState([]);
@@ -30,6 +31,8 @@ export const ReportManagementPage = () => {
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('All Categories');
   const [statusFilter, setStatusFilter] = useState('All Statuses');
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
 
   // Investigation Modal State
   const [selectedReport, setSelectedReport] = useState(null);
@@ -42,16 +45,19 @@ export const ReportManagementPage = () => {
   const [resolutionNote, setResolutionNote] = useState('');
   const [resolving, setResolving] = useState(false);
 
-  const fetchReports = async () => {
+  const fetchReports = async (targetPage = page) => {
     try {
       setLoading(true);
       const res = await reportService.getReports({
         search,
         category: categoryFilter,
         status: statusFilter,
+        page: targetPage - 1,
+        size: 12,
       });
       if (res.success) {
         setReports(res.data || []);
+        setTotalPages(res.totalPages || 1);
       }
     } catch (err) {
       console.error('Failed to load reports:', err);
@@ -61,8 +67,12 @@ export const ReportManagementPage = () => {
   };
 
   useEffect(() => {
-    fetchReports();
+    setPage(1);
   }, [categoryFilter, statusFilter]);
+
+  useEffect(() => {
+    fetchReports(page);
+  }, [categoryFilter, statusFilter, page]);
 
   const handleSearchSubmit = (e) => {
     e.preventDefault();
@@ -187,6 +197,7 @@ export const ReportManagementPage = () => {
           <LoadingSpinner size="lg" text="Loading moderation reports..." />
         </div>
       ) : reports.length > 0 ? (
+        <>
         <div className="flex flex-col gap-4">
           {reports.map((report) => {
             const isPending = report.status === 'Pending';
@@ -280,6 +291,16 @@ export const ReportManagementPage = () => {
             );
           })}
         </div>
+
+        {totalPages > 1 && (
+          <Pagination
+            currentPage={page}
+            totalPages={totalPages}
+            onPageChange={setPage}
+            className="pt-2"
+          />
+        )}
+      </>
       ) : (
         <EmptyState
           icon={faFlag}

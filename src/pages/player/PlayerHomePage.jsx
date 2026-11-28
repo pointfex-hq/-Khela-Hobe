@@ -20,6 +20,11 @@ import { matchService } from '../../services/endpoints/matchService';
 import { playerService } from '../../services/endpoints/playerService';
 import { useAppStore } from '../../store/useAppStore';
 import { haversineDistanceKm } from '../../utils/formatters';
+import {
+  isUserEligibleForMatch,
+  formatMatchGenderLabel,
+  formatMatchAgeLabel,
+} from '../../utils/matchEligibility';
 import Button from '../../components/common/Button';
 import toast from 'react-hot-toast';
 
@@ -37,18 +42,21 @@ export const PlayerHomePage = () => {
   const sportsPills = ['All Sports', 'Football', 'Badminton', 'Cricket', 'Basketball'];
 
   useEffect(() => {
-    fetchMatches();
+    fetchMatches({ force: Boolean(user?.gender || user?.age) });
     detectUserLocation();
     playerService
       .getPlayerUpcomingSchedule(user?.id)
       .then((res) => setSchedule(res.data || []))
       .catch(() => {});
-  }, [fetchMatches, detectUserLocation, user?.id]);
+  }, [fetchMatches, detectUserLocation, user?.id, user?.gender, user?.age]);
 
-  // Filter & prioritize nearest user location in-memory without re-querying DB
+  // Filter by profile eligibility & prioritize nearest user location in-memory
   const matches = useMemo(() => {
     let list = (rawMatches || []).filter(
-      (m) => m.state !== 'cancelled' && m.status !== 'CANCELLED'
+      (m) =>
+        m.state !== 'cancelled' &&
+        m.status !== 'CANCELLED' &&
+        isUserEligibleForMatch(user, m).eligible
     );
     if (selectedSport && selectedSport !== 'All Sports') {
       const q = selectedSport.toLowerCase();
@@ -68,7 +76,7 @@ export const PlayerHomePage = () => {
       });
     }
     return list;
-  }, [rawMatches, selectedSport, userLocation]);
+  }, [rawMatches, selectedSport, userLocation, user]);
 
   const handleJoinMatch = async (match) => {
     try {
@@ -105,16 +113,18 @@ export const PlayerHomePage = () => {
           </h1>
         </div>
 
-        <Link to={ROUTES.CREATE_QUICK_MATCH} className="self-start md:self-auto">
-          <Button
-            variant="primary"
-            size="md"
-            icon={faPlus}
-            className="font-bold py-2.5 px-5 shadow-sm"
-          >
-            Create Quick Match
-          </Button>
-        </Link>
+        {(user?.quickMatchHostEnabled || user?.isVerifiedOrganizer || (user?.roles || []).includes('ADMIN')) && (
+          <Link to={ROUTES.CREATE_QUICK_MATCH} className="self-start md:self-auto">
+            <Button
+              variant="primary"
+              size="md"
+              icon={faPlus}
+              className="font-bold py-2.5 px-5 shadow-sm"
+            >
+              Create Quick Match
+            </Button>
+          </Link>
+        )}
       </section>
 
       {/* Sport Filter Pills (Reference lines 320-326) */}
@@ -204,6 +214,20 @@ export const PlayerHomePage = () => {
                         {match.filledSlots} / {match.totalSlots} players • {slotsLeft > 0 ? `${slotsLeft} slot${slotsLeft > 1 ? 's' : ''} left` : '0 slots left'} • {match.skillLevel}
                       </span>
                     </div>
+                    {(match.genderRestriction !== 'ALL' || match.minAge > 0 || match.maxAge < 99) && (
+                      <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                        {match.genderRestriction && match.genderRestriction !== 'ALL' && (
+                          <span className="px-2 py-0.5 rounded-full bg-secondary/15 text-secondary font-label text-[11px] font-semibold">
+                            {formatMatchGenderLabel(match.genderRestriction)}
+                          </span>
+                        )}
+                        {(match.minAge > 0 || match.maxAge < 99) && (
+                          <span className="px-2 py-0.5 rounded-full bg-primary/15 text-primary font-label text-[11px] font-semibold tabular-nums">
+                            {formatMatchAgeLabel(match.minAge, match.maxAge)}
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
 

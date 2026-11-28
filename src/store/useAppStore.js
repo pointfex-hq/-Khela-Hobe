@@ -137,7 +137,7 @@ export const useAppStore = create(
         set({ matchesLoading: true });
         try {
           const response = await apiClient.get('/matches', {
-            params: { page: 0, size: 100 },
+            params: { page: 0, size: 24 },
           });
           const pageData = unwrapEnvelope(response);
           const rawList = Array.isArray(pageData?.content)

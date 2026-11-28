@@ -22,6 +22,11 @@ import { ratingService } from '../../services/endpoints/ratingService';
 import { tokenService } from '../../utils/tokenService';
 import { useAuth } from '../../hooks/useAuth';
 import { ROUTES } from '../../constants/routes';
+import {
+  isUserEligibleForMatch,
+  formatMatchGenderLabel,
+  formatMatchAgeLabel,
+} from '../../utils/matchEligibility';
 import Button from '../../components/common/Button';
 import MatchChatBox from '../../components/chat/MatchChatBox';
 import RatingWidgetModal, { StarSummaryBadge } from '../../components/common/RatingWidgetModal';
@@ -313,6 +318,12 @@ export const MatchDetailsPage = () => {
               </span>
               <span className="px-3 py-1 rounded-full bg-light-surface-elevated dark:bg-dark-surface-elevated text-light-on-surface dark:text-dark-on-surface font-label text-label-sm">
                 {match.skillLevel}
+              </span>
+              <span className="px-3 py-1 rounded-full bg-secondary/15 text-secondary font-label text-label-sm font-semibold">
+                {formatMatchGenderLabel(match.genderRestriction)}
+              </span>
+              <span className="px-3 py-1 rounded-full bg-primary/15 text-primary font-label text-label-sm font-semibold tabular-nums">
+                {formatMatchAgeLabel(match.minAge, match.maxAge)}
               </span>
             </div>
 
@@ -606,6 +617,23 @@ export const MatchDetailsPage = () => {
                 <Button variant="tertiary" size="md" fullWidth disabled>
                   Roster Full
                 </Button>
+              </div>
+            ) : !(match.viewerEligibility?.eligible ?? isUserEligibleForMatch(user, match).eligible) ? (
+              <div className="flex flex-col gap-3">
+                <div className="p-3 rounded-md bg-warning/10 border border-warning/30 flex items-start gap-2 text-warning text-xs font-body">
+                  <FontAwesomeIcon icon={faCircleExclamation} className="mt-0.5 shrink-0" />
+                  <span>
+                    {(match.viewerEligibility && match.viewerEligibility.reason) ||
+                      isUserEligibleForMatch(user, match).reason}
+                  </span>
+                </div>
+                {user && (
+                  <Link to={ROUTES.PLAYER_PROFILE_EDIT}>
+                    <Button variant="secondary" size="md" fullWidth>
+                      Update Age &amp; Gender in Profile
+                    </Button>
+                  </Link>
+                )}
               </div>
             ) : (
               <Button

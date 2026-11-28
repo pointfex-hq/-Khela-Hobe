@@ -29,6 +29,7 @@ import EmptyState from '../../components/common/EmptyState';
 import LoadingSpinner from '../../components/feedback/LoadingSpinner';
 import Modal from '../../components/modals/Modal';
 import ConfirmationDialog from '../../components/feedback/ConfirmationDialog';
+import Pagination from '../../components/common/Pagination';
 
 export const UserManagementPage = () => {
   const navigate = useNavigate();
@@ -43,6 +44,8 @@ export const UserManagementPage = () => {
   const [roleFilter, setRoleFilter] = useState('All Roles');
   const [statusFilter, setStatusFilter] = useState('All Statuses');
   const [approvingId, setApprovingId] = useState(null);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
 
   // Confirmation banner
   const [actionNotice, setActionNotice] = useState(null);
@@ -58,7 +61,7 @@ export const UserManagementPage = () => {
     action: 'restrict', // 'restrict', 'suspend', 'reactivate'
   });
 
-  const fetchUsers = async () => {
+  const fetchUsers = async (targetPage = page) => {
     try {
       setLoading(true);
       const res = await userService.getUsers({
@@ -66,10 +69,13 @@ export const UserManagementPage = () => {
         role: roleFilter,
         status: statusFilter,
         approvalStatus: viewTab === 'approvals' ? 'PENDING' : 'ALL',
+        page: targetPage - 1,
+        size: 15,
       });
       if (res.success) {
         setUsers(res.data || []);
         setPendingOrganizerCount(res.pendingOrganizerCount ?? 0);
+        setTotalPages(res.totalPages || 1);
       }
     } catch (err) {
       console.error('Failed to load users:', err);
@@ -79,8 +85,12 @@ export const UserManagementPage = () => {
   };
 
   useEffect(() => {
-    fetchUsers();
+    setPage(1);
   }, [roleFilter, statusFilter, viewTab]);
+
+  useEffect(() => {
+    fetchUsers(page);
+  }, [roleFilter, statusFilter, viewTab, page]);
 
   const handleOrganizerApproval = async (user, decision) => {
     setApprovingId(user.id);
@@ -588,6 +598,16 @@ export const UserManagementPage = () => {
               </tbody>
             </table>
             </div>
+
+            {totalPages > 1 && (
+              <div className="p-4 border-t border-light-border dark:border-dark-border">
+                <Pagination
+                  currentPage={page}
+                  totalPages={totalPages}
+                  onPageChange={setPage}
+                />
+              </div>
+            )}
           </>
         ) : (
           <EmptyState

@@ -13,12 +13,15 @@ import {
 import { applicationService } from '../../services/endpoints/applicationService';
 import { ROUTES } from '../../constants/routes';
 import Button from '../../components/common/Button';
+import Pagination from '../../components/common/Pagination';
 import toast from 'react-hot-toast';
 
 export const PlayerApplicationsPage = () => {
   const [activeTab, setActiveTab] = useState('all');
   const [applications, setApplications] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
 
   const tabs = [
     { id: 'all', label: 'All Applications' },
@@ -28,11 +31,15 @@ export const PlayerApplicationsPage = () => {
     { id: 'withdrawn', label: 'Withdrawn' },
   ];
 
-  const fetchApplications = async () => {
+  const fetchApplications = async (targetPage = page) => {
     setLoading(true);
     try {
-      const res = await applicationService.getMyApplications(activeTab);
+      const res = await applicationService.getMyApplications(activeTab, {
+        page: targetPage - 1,
+        size: 10,
+      });
       setApplications(res.data || []);
+      setTotalPages(res.totalPages || 1);
     } catch (err) {
       console.error('Failed to load applications', err);
     } finally {
@@ -41,8 +48,12 @@ export const PlayerApplicationsPage = () => {
   };
 
   useEffect(() => {
-    fetchApplications();
+    setPage(1);
   }, [activeTab]);
+
+  useEffect(() => {
+    fetchApplications(page);
+  }, [activeTab, page]);
 
   const handleWithdraw = async (appId) => {
     try {
@@ -228,6 +239,15 @@ export const PlayerApplicationsPage = () => {
           ))
         )}
       </div>
+
+      {!loading && totalPages > 1 && (
+        <Pagination
+          currentPage={page}
+          totalPages={totalPages}
+          onPageChange={setPage}
+          className="pt-2"
+        />
+      )}
     </div>
   );
 };

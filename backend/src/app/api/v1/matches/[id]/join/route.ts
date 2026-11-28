@@ -7,6 +7,7 @@ import { toParticipantDto } from '@/lib/mappers';
 import { invalidateMatchesCache } from '@/lib/cache';
 import { sendPreferenceAwareEmail } from '@/lib/emailDispatcher';
 import { matchJoinConfirmedEmailTemplate } from '@/lib/emailTemplates';
+import { checkMatchEligibility, getViewerEligibilityProfile } from '@/lib/eligibility';
 
 export async function POST(
   request: NextRequest,
@@ -19,6 +20,7 @@ export async function POST(
     }
 
     const { id } = await context.params;
+    const viewer = await getViewerEligibilityProfile(session);
 
     const participant = await prisma.$transaction(async (tx) => {
       const match = await tx.match.findUnique({
@@ -34,6 +36,14 @@ export async function POST(
 
       if (match.status === MatchStatus.CANCELLED || match.status === MatchStatus.COMPLETED) {
         throw { code: 'CUSTOM_BAD_REQUEST', message: 'Cannot join a cancelled or completed match' };
+      }
+
+      const eligibility = checkMatchEligibility(viewer, match);
+      if (!eligibility.eligible) {
+        throw {
+          code: 'CUSTOM_FORBIDDEN',
+          message: eligibility.reason || 'You do not meet this match’s age/gender requirements.',
+        };
       }
 
       if (
@@ -137,6 +147,9 @@ export async function POST(
     }
     if (custom?.code === 'CUSTOM_BAD_REQUEST') {
       return fail('BAD_REQUEST', custom.message || 'Unable to join match', 400);
+    }
+    if (custom?.code === 'CUSTOM_FORBIDDEN') {
+      return fail('ELIGIBILITY_RESTRICTED', custom.message || 'Not eligible for this match', 403);
     }
     return handleRouteError(error);
   }

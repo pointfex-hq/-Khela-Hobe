@@ -19,6 +19,11 @@ import { matchService } from '../../services/endpoints/matchService';
 import { uploadService } from '../../services/endpoints/uploadService';
 import { useAppStore } from '../../store/useAppStore';
 import { toBackendSkillLevel } from '../../utils/dtoMappers';
+import {
+  MATCH_GENDER_OPTIONS,
+  formatMatchGenderLabel,
+  formatMatchAgeLabel,
+} from '../../utils/matchEligibility';
 import { toastService } from '../../components/feedback/toastService';
 import LocationPickerMap from '../../components/common/LocationPickerMap';
 import { ROUTES } from '../../constants/routes';
@@ -70,6 +75,9 @@ export const CreateQuickMatchPage = ({ isEdit = false }) => {
       minPlayers: 2,
       maxPlayers: 10,
       skillLevel: 'Intermediate',
+      genderRestriction: 'ALL',
+      minAge: 0,
+      maxAge: 99,
       joinMode: 'open', // 'open' | 'approval'
       turfFee: '',
       equipmentFee: '',
@@ -124,6 +132,9 @@ export const CreateQuickMatchPage = ({ isEdit = false }) => {
               minPlayers: m.minPlayers || 2,
               maxPlayers: m.totalSlots || 10,
               skillLevel: m.skillLevel || 'Intermediate',
+              genderRestriction: m.genderRestriction || 'ALL',
+              minAge: typeof m.minAge === 'number' ? m.minAge : 0,
+              maxAge: typeof m.maxAge === 'number' ? m.maxAge : 99,
               joinMode: m.mode === 'APPLICATION_REQUIRED' ? 'approval' : 'open',
               turfFee: m.feeAmount ? String(m.feeAmount) : '',
               equipmentFee: m.equipmentFee ? String(m.equipmentFee) : '',
@@ -214,6 +225,14 @@ export const CreateQuickMatchPage = ({ isEdit = false }) => {
     const parsedEquipmentFee =
       parseFloat(String(data.equipmentFee || '0').replace(/[^\d.]/g, '')) || 0;
 
+    const minAge = Math.max(0, Math.min(99, parseInt(String(data.minAge ?? 0), 10) || 0));
+    const maxAge = Math.max(5, Math.min(99, parseInt(String(data.maxAge ?? 99), 10) || 99));
+    if (minAge > maxAge) {
+      toastService.error('Minimum age cannot exceed maximum age.');
+      setLoading(false);
+      return;
+    }
+
     const payload = {
       title: data.title,
       description: data.description || undefined,
@@ -232,6 +251,9 @@ export const CreateQuickMatchPage = ({ isEdit = false }) => {
       capacity: Math.max(2, Math.min(200, parseInt(data.maxPlayers, 10) || 10)),
       mode: data.joinMode === 'approval' ? 'APPLICATION_REQUIRED' : 'INSTANT_JOIN',
       skillLevel: toBackendSkillLevel(data.skillLevel),
+      genderRestriction: data.genderRestriction || 'ALL',
+      minAge,
+      maxAge,
       feeAmount: parsedFee,
       equipmentFee: parsedEquipmentFee,
       allowOnlinePayment: isFullOrganizer ? Boolean(data.allowOnlinePayment) : false,
@@ -598,6 +620,47 @@ export const CreateQuickMatchPage = ({ isEdit = false }) => {
               </label>
             </div>
 
+            {/* Gender Eligibility & Age Range Limits */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-1">
+              <label className="flex flex-col gap-1.5">
+                <span className="font-label text-label-md">Gender Eligibility</span>
+                <select
+                  {...register('genderRestriction')}
+                  className="w-full px-3.5 py-2.5 rounded-md bg-light-background dark:bg-dark-background border border-light-border dark:border-dark-border font-body text-body-md focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none"
+                >
+                  {MATCH_GENDER_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="flex flex-col gap-1.5">
+                <span className="font-label text-label-md">Minimum Age (0 = Any)</span>
+                <input
+                  type="number"
+                  min="0"
+                  max="99"
+                  {...register('minAge', { min: 0, max: 99 })}
+                  placeholder="0"
+                  className="w-full px-3.5 py-2.5 rounded-md bg-light-background dark:bg-dark-background border border-light-border dark:border-dark-border font-body text-body-md tabular-nums focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none"
+                />
+              </label>
+
+              <label className="flex flex-col gap-1.5">
+                <span className="font-label text-label-md">Maximum Age (99 = Any)</span>
+                <input
+                  type="number"
+                  min="5"
+                  max="99"
+                  {...register('maxAge', { min: 5, max: 99 })}
+                  placeholder="99"
+                  className="w-full px-3.5 py-2.5 rounded-md bg-light-background dark:bg-dark-background border border-light-border dark:border-dark-border font-body text-body-md tabular-nums focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none"
+                />
+              </label>
+            </div>
+
             {/* Join Mode Radio Cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
               <label
@@ -787,6 +850,14 @@ export const CreateQuickMatchPage = ({ isEdit = false }) => {
                   1 / {watchedValues.maxPlayers || 4} players • {watchedValues.skillLevel || 'Intermediate'}
                 </span>
               </span>
+              <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                <span className="px-2 py-0.5 rounded-full bg-light-surface-elevated dark:bg-dark-surface-elevated border border-light-border dark:border-dark-border text-[11px] font-label font-semibold">
+                  {formatMatchGenderLabel(watchedValues.genderRestriction)}
+                </span>
+                <span className="px-2 py-0.5 rounded-full bg-light-surface-elevated dark:bg-dark-surface-elevated border border-light-border dark:border-dark-border text-[11px] font-label font-semibold tabular-nums">
+                  {formatMatchAgeLabel(watchedValues.minAge, watchedValues.maxAge)}
+                </span>
+              </div>
             </div>
 
             {watchedValues.turfFee && (

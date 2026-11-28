@@ -13,6 +13,7 @@ import { applicationService } from '../../services/endpoints/applicationService'
 import { matchService } from '../../services/endpoints/matchService';
 import LoadingSpinner from '../../components/feedback/LoadingSpinner';
 import EmptyState from '../../components/common/EmptyState';
+import Pagination from '../../components/common/Pagination';
 import { toastService } from '../../components/feedback/toastService';
 import { ROUTES } from '../../constants/routes';
 
@@ -23,27 +24,35 @@ export const ApplicationReviewPage = () => {
   const [applications, setApplications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [actionLoadingId, setActionLoadingId] = useState(null);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
 
   // Fetch match details (if scoped) and pending applicants across organizer's matches
-  const loadData = async () => {
+  const loadData = async (targetPage = page) => {
     setLoading(true);
     try {
       if (matchId) {
         const [matchRes, appsRes] = await Promise.all([
           matchService.getMatchById(matchId),
-          applicationService.getOrganizerApplications(matchId),
+          applicationService.getOrganizerApplications(matchId, { status: 'PENDING' }),
         ]);
         if (matchRes?.data) {
           setMatch(matchRes.data);
         }
         if (appsRes?.data) {
           setApplications(appsRes.data.filter((a) => a.status === 'pending'));
+          setTotalPages(1);
         }
       } else {
         setMatch(null);
-        const appsRes = await applicationService.getOrganizerApplications();
+        const appsRes = await applicationService.getOrganizerApplications(undefined, {
+          status: 'PENDING',
+          page: targetPage - 1,
+          size: 10,
+        });
         if (appsRes?.data) {
           setApplications(appsRes.data.filter((a) => a.status === 'pending'));
+          setTotalPages(appsRes.totalPages || 1);
         }
       }
     } catch {
@@ -54,8 +63,12 @@ export const ApplicationReviewPage = () => {
   };
 
   useEffect(() => {
-    loadData();
+    setPage(1);
   }, [matchId]);
+
+  useEffect(() => {
+    loadData(page);
+  }, [matchId, page]);
 
   const totalSlots = match?.totalSlots || 0;
   const filledSlots = match?.filledSlots || 0;
@@ -264,6 +277,15 @@ export const ApplicationReviewPage = () => {
               );
             })}
           </section>
+        )}
+
+        {!loading && totalPages > 1 && (
+          <Pagination
+            currentPage={page}
+            totalPages={totalPages}
+            onPageChange={setPage}
+            className="pt-2"
+          />
         )}
       </div>
     </div>
